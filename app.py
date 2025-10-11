@@ -101,7 +101,7 @@ def render_form1_page():
     st.header("📊 Form #1")
 
     with st.form("form1"):
-        st.subheader("Initial Assessment")
+        st.subheader("Introducción")
 
         col1, col2 = st.columns(2)
 
@@ -320,8 +320,34 @@ def render_form2_page():
 
 
 def render_data_analysis_page():
-    """Simple data analysis page (placeholder)"""
+    """Data analysis page with embedded dashboard"""
     st.header("📊 Data Analysis")
+    
+    # Embedded Looker Studio Dashboard
+    st.subheader("📈 Interactive Dashboard")
+    
+    # Try to embed using Streamlit components
+    try:
+        import streamlit.components.v1 as components
+        components.iframe(
+            "http://lookerstudio.google.com/reporting/d63874eb-c430-498b-93f5-292ce260a969",
+            height=600,
+            scrolling=True
+        )
+    except Exception as e:
+        st.warning("⚠️ Dashboard no se puede mostrar en localhost. Ve a la versión en vivo.")
+        st.markdown(
+            """
+            ### 📊 Accede al Dashboard
+            [Abrir Dashboard de Looker Studio](http://lookerstudio.google.com/reporting/d63874eb-c430-498b-93f5-292ce260a969)
+            """,
+            unsafe_allow_html=True
+        )
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.subheader("📁 Upload Your Data")
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"]) 
     if uploaded_file is not None:
         try:
