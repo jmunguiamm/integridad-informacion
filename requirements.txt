@@ -46,3 +46,4 @@ flake8>=6.0.0
 # QR (optional)
 qrcode[pil]>=7.4
 Pillow>=10.4
+matplotlib\nwordcloud
