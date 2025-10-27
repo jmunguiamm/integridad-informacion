@@ -66,33 +66,63 @@ def _autorefresh_toggle(key="auto_refresh_key", millis=60_000):
     return auto
 
 def _typing_then_bubble(message_text: str, typing_path="images/typing.gif"):
-    """Efecto typing + burbuja tipo WhatsApp."""
+    """Simula el envío de un mensaje tipo WhatsApp con estilo realista mejorado."""
+    import datetime, time, os
+
     if os.path.isfile(typing_path):
         holder = st.empty()
         with holder.container():
             st.image(typing_path, width=70)
-            time.sleep(1.4)
+            time.sleep(1.3)
         holder.empty()
+
+    now = datetime.datetime.now().strftime("%-I:%M %p")
+
     st.markdown(
         f"""
-        <div style="display:flex; justify-content:flex-end; margin:10px 0;">
+        <div style="
+            display: flex;
+            justify-content: flex-end;
+            margin: 10px 0;
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+        ">
             <div style="
-                background-color:#dcf8c6;
-                border-radius:10px;
-                padding:14px 18px;
-                max-width:75%;
-                font-family:'Segoe UI',sans-serif;
-                font-size:16px;
-                color:#111;
-                box-shadow:0 1px 2px rgba(0,0,0,0.2);
-                line-height:1.5;
-                animation: fadeIn 0.6s ease-out;">
-                {message_text}
+                background-color: #DCF8C6;
+                border-radius: 14px;
+                padding: 10px 14px 6px 14px;
+                max-width: 75%;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+                position: relative;
+                word-wrap: break-word;
+                line-height: 1.45;
+            ">
+                <div style="
+                    font-size: 12.5px;
+                    color: #667781;
+                    margin-bottom: 5px;
+                    display: flex;
+                    align-items: center;
+                ">
+                    <span style="font-size: 13px; margin-right: 5px;">↪↪</span> Forwarded many times
+                </div>
+                <div style="
+                    font-size: 15.5px;
+                    color: #111;
+                    text-align: left;
+                    margin-bottom: 6px;
+                    white-space: pre-wrap;
+                ">
+                    {message_text}
+                </div>
+                <div style="
+                    font-size: 11px;
+                    color: #667781;
+                    text-align: right;
+                ">
+                    {now}&nbsp;<span style="color:#34B7F1;">✓✓</span>
+                </div>
             </div>
         </div>
-        <style>
-        @keyframes fadeIn {{ from {{opacity:0; transform: translateY(15px);}} to {{opacity:1; transform: translateY(0);}} }}
-        </style>
         """,
         unsafe_allow_html=True,
     )
@@ -114,6 +144,106 @@ def _openai_client():
     if not api_key:
         raise RuntimeError("Falta OPENAI_API_KEY.")
     return OpenAI(api_key=api_key)
+
+def _load_joined_responses():
+    forms = []
+    for form in [("FORM0_SHEET_ID","FORM0_TAB"),
+                 ("FORM1_SHEET_ID","FORM1_TAB"),
+                 ("FORM2_SHEET_ID","FORM2_TAB")]:
+        sid = _read_secrets(form[0],"")
+        tab = _read_secrets(form[1],"")
+        if not sid or not tab: continue
+        try:
+            df = _sheet_to_df(sid, tab)
+            df.columns = [c.strip() for c in df.columns]
+            df["source_form"] = form[0][:6]  # F0/F1/F2
+            forms.append(df)
+        except Exception as e:
+            st.warning(f"No pude leer {form}: {e}")
+    if not forms:
+        return pd.DataFrame()
+    df_all = pd.concat(forms, ignore_index=True)
+    # unify join key
+    key_candidates = [c for c in df_all.columns if "tarjeta" in c.lower()]
+    if key_candidates:
+        key = key_candidates[0]
+        df_all[key] = df_all[key].astype(str).str.strip()
+    else:
+        key = None
+    return df_all, key
+
+def _load_joined_responses():
+    """Reads Form0, Form1, Form2 and joins on 'número de tarjeta'."""
+    forms = []
+    for form in [("FORM0_SHEET_ID","FORM0_TAB"),
+                 ("FORM1_SHEET_ID","FORM1_TAB"),
+                 ("FORM2_SHEET_ID","FORM2_TAB")]:
+        sid = _read_secrets(form[0],"")
+        tab = _read_secrets(form[1],"")
+        if not sid or not tab: continue
+        try:
+            df = _sheet_to_df(sid, tab)
+            df.columns = [c.strip() for c in df.columns]
+            df["source_form"] = form[0][:6]  # F0/F1/F2
+            forms.append(df)
+        except Exception as e:
+            st.warning(f"No pude leer {form}: {e}")
+    if not forms:
+        return pd.DataFrame()
+    df_all = pd.concat(forms, ignore_index=True)
+    # unify join key
+    key_candidates = [c for c in df_all.columns if "tarjeta" in c.lower()]
+    if key_candidates:
+        key = key_candidates[0]
+        df_all[key] = df_all[key].astype(str).str.strip()
+    else:
+        key = None
+    return df_all, key
+
+def _analyze_reactions(df_all, key):
+    """Analyze reactions and patterns across Form 0–2."""
+    sample = df_all.head(200).to_dict(orient="records")
+    sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
+
+    prompt = f"""
+Eres un analista de talleres educativos sobre desinformación.
+
+Tienes datos combinados de tres formularios:
+- [Form 0] Contexto del grupo y del docente.
+- [Form 1] Percepciones de inseguridad y emociones previas.
+- [Form 2] Reacciones ante las noticias con diferentes encuadres narrativos.
+
+Cada fila está vinculada por un número de tarjeta que representa a una persona.
+
+Tu tarea:
+1️⃣ Identifica patrones de reacción emocional ante las tres noticias (miedo, enojo, empatía, desconfianza, indiferencia, etc.).
+2️⃣ Distingue qué encuadres (desconfianza, polarización, miedo/control, historia personal) provocaron más reacciones emocionales fuertes o reflexivas.
+3️⃣ Detecta diferencias por contexto del grupo (según Form 0) y por percepciones iniciales (Form 1).
+4️⃣ Resume los hallazgos en 4 secciones:
+   - “Principales patrones emocionales”
+   - “Comparación entre encuadres”
+   - “Factores del contexto que influyen”
+   - “Recomendaciones pedagógicas para la siguiente sesión”
+5️⃣ Agrega un breve párrafo de síntesis general para el reporte final.
+
+Datos:
+{sample_txt}
+
+Responde en Markdown estructurado.
+"""
+    client = _openai_client()
+    with st.spinner("🔎 Analizando reacciones y patrones..."):
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            temperature=0.4,
+            max_tokens=1200,
+            messages=[
+                {"role":"system","content":"Eres un analista pedagógico experto en alfabetización mediática."},
+                {"role":"user","content":prompt}
+            ]
+        )
+    return resp.choices[0].message.content.strip()
+
 
 # ---------- PÁGINAS ----------
 
@@ -203,7 +333,7 @@ def render_analysis_trends_page():
 
     # ---- OpenAI: análisis de tema dominante + WordCloud ----
 
-    from wordcloud import WordCloud
+    from wordcloud import WordCloud, STOPWORDS
     import matplotlib.pyplot as plt
 
     # --- Form 0 (contexto general) ---
@@ -228,37 +358,51 @@ def render_analysis_trends_page():
     ])
 
     analysis_prompt = f"""
-    Actúa como un analista de datos cualitativos experto en percepción pública y comunicación social.
+    Actúa como un **analista de datos cualitativos experto en percepción pública y comunicación social**. 
+    Tu tarea es interpretar información de talleres educativos sobre integridad de la información y desinformación.
 
-    Tienes las siguientes fuentes de información:
+    Dispones de dos fuentes de entrada:
 
-    [Contexto de participantes – Form 0]
+    [Formulario 0 – Contexto de participantes]
     {context_text or "(vacío)"}
 
-    [Percepciones de inseguridad y consumo informativo – Form 1]
+    [Formulario 1 – Percepciones de inseguridad y consumo informativo]
     {sample}
 
-    Tarea:
-    1️⃣ Analiza ambas fuentes para identificar el **tema o patrón dominante** (por ejemplo: crimen organizado, violencia de género, pobreza, desconfianza institucional, etc.).
-    2️⃣ Considera tanto las **emociones expresadas** como las **frecuencias o hábitos de consumo de noticias** si están presentes.
-    3️⃣ Resume los patrones recurrentes, causas mencionadas, actores y emociones predominantes.
-    4️⃣ Sugiere palabras clave que podrían servir para una nube de palabras (máx 10).
+    ---
 
-    Responde **únicamente en formato JSON válido** con esta estructura:
+    🎯 **Objetivo del análisis:**
+    Identifica el **tema o patrón dominante** en las respuestas del [Formulario 1], 
+    enfocándote en los eventos o situaciones que generan **sensación de inseguridad** entre las personas participantes. 
+    Integra también cualquier información contextual del [Formulario 0] que te ayude a entender mejor el entorno o perfil del grupo.
+    No cuenta como tema dominantes la emocion generada o asociada, el tema es un fenomenon como "crisis climatica" o "bullying" y no las reacciones asociadas.
+    🧩 **Tareas específicas:**
+    1️⃣ Analiza ambas fuentes para determinar el **tema principal o evento recurrente** (ej. crimen organizado, violencia de género, pobreza, desconfianza institucional, etc.).  
+    2️⃣ Describe las **emociones predominantes** (ej. miedo, enojo, desconfianza, resignación).  
+    3️⃣ Resume los **patrones y causas** más mencionados, así como los **actores involucrados** (si aplica).  
+    4️⃣ Sugiere hasta **10 palabras clave** relevantes que puedan usarse para una nube de palabras.  
+    5️⃣ Incluye **2 respuestas representativas** que ilustren el patrón identificado.
 
+    ---
+
+    📄 **Formato de salida (JSON válido y estructurado):**
     {{
-    "dominant_theme": "<frase corta>",
-    "rationale": "<explicación en 2–4 oraciones>",
+    "dominant_theme": "<tema o patrón dominante, frase corta>",
+    "rationale": "<explicación breve en 2–4 oraciones, tono analítico y pedagógico>",
+    "emotional_tone": "<emociones predominantes>",
     "top_keywords": ["<palabra1>", "<palabra2>", "<palabra3>", ...],
-    "representative_answers": ["<cita1>", "<cita2>"],
-    "emotional_tone": "<breve descripción del tono emocional (ej: miedo, desconfianza, enojo, resignación)>"
+    "representative_answers": ["<cita1>", "<cita2>"]
     }}
 
-    Reglas:
-    - No inventes información fuera del contenido mostrado.
-    - Mantén tono analítico, pedagógico y neutro.
-    - Usa el español mexicano natural.
+    ---
+
+    🧠 **Reglas:**
+    - No inventes información que no esté en los datos.  
+    - Mantén tono neutro, analítico y educativo.  
+    - Usa español mexicano natural.  
+    - No devuelvas texto adicional fuera del JSON.
     """
+
 
     try:
         client = _openai_client()
@@ -297,31 +441,24 @@ def render_analysis_trends_page():
 
     # ---- NUBE DE PALABRAS ----
     st.markdown("---")
-    st.subheader("☁️ Nube de palabras — noticias que causan inseguridad")
+    st.subheader("☁️ Nube de palabras — temas que causan inseguridad")
 
-    columna_inseguridad = "¿Qué noticia te ha hecho sentir mayor inseguridad este año?"
-    if columna_inseguridad in df.columns:
-        textos = df[columna_inseguridad].dropna().astype(str)
-        if not textos.empty:
-            combined_text = " ".join(textos)
-            wc = WordCloud(
-                width=800,
-                height=400,
-                background_color="white",
-                colormap="viridis",
-                max_words=100,
-                stopwords=set(["de", "la", "el", "en", "y", "que", "por", "a", "los", "las", "del"])
-            ).generate(combined_text)
+    text = " ".join(df["Identifica una noticia que te haya provocado inseguridad o un sentir negativo este año y descríbela."].dropna().astype(str))
+    wc = WordCloud(
+        width=800,
+        height=400,
+        background_color="white",
+        stopwords=STOPWORDS.union({"que", "del", "por", "con", "los", "las", "una", "uno", "como"}),
+        collocations=False,
+        regexp=r'\b[a-zA-ZáéíóúñÁÉÍÓÚÑ]{3,}\b',  # ✅ only words 3+ letters
+        ).generate(text)
 
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.imshow(wc, interpolation="bilinear")
-            ax.axis("off")
-            st.pyplot(fig)
-        else:
-            st.info("No hay respuestas en la columna de noticias que causan inseguridad.")
-    else:
-        st.warning(f"No se encontró la columna: '{columna_inseguridad}'")
-        
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(wc, interpolation="bilinear")
+    ax.axis("off")
+    st.pyplot(fig)
+
+
 
     # ---- Generar noticias ----
     if st.button("📰 Generar 3 noticias y continuar", type="primary"):
@@ -332,18 +469,71 @@ def render_analysis_trends_page():
 4) Historias personales
 """
         prompt2 = f"""
-Tema dominante: {dom}.
-Redacta exactamente 3 mensajes tipo WhatsApp (≤100 palabras), uno por encuadre.
-Formato:
-1) Encuadre: <nombre>
-   Mensaje: <texto>
+Actúa como un **asistente pedagógico** dentro de un taller sobre integridad de la información 
+organizado por el Gobierno de Zacatecas y el Programa de las Naciones Unidas para el Desarrollo (PNUD).
+
+🎭 **Rol simulado:**
+Adopta el rol de una persona que busca ganar influencia en redes sociales 
+mediante la creación de mensajes y “noticias” sobre temas de inseguridad.
+⚠️ Es un rol controlado y educativo: **no generes desinformación real**.
+Tu objetivo es ilustrar cómo los diferentes encuadres narrativos modifican la percepción de un mismo hecho.
+
 ---
-2) Encuadre: <nombre>
-   Mensaje: <texto>
+
+📚 **Contexto:**
+Usa la información del **tema dominante previamente identificado** (`{dom}`), 
+que proviene del análisis de las respuestas del [Formulario 1] 
+(sobre las noticias que generaron sensación de inseguridad entre las personas participantes).  
+No repitas el análisis: usa el resultado del modelo anterior como referencia base.
+
 ---
-3) Encuadre: <nombre>
-   Mensaje: <texto>
-{ref}
+
+🧩 **Tarea de redacción:**
+Redacta **exactamente tres mensajes tipo WhatsApp (≤100 palabras cada uno)**, 
+cada uno representando **un encuadre narrativo distinto** de la lista [Referencia 1.1 – Tipos de encuadres narrativos].  
+Integra un elemento de difusión o contexto social en cada mensaje, eligiendo uno de los siguientes:
+- “Reenviado varias veces”
+- “Compartido en chat vecinal”
+- “Difundido en grupos de la escuela”
+- “Mensaje compartido por un número anónimo”
+
+Además, **añade una imagen sugerida** tomada de la carpeta [2. Imágenes de referencia].
+
+---
+
+🧱 **Formato de salida:**
+1) Encuadre: <nombre del encuadre>
+   Mensaje: <texto estilo WhatsApp, ≤100 palabras, tono y recursos coherentes con el encuadre>
+   Imagen sugerida: <nombre o descripción breve>
+---
+2) Encuadre: <nombre del encuadre>
+   Mensaje: <texto estilo WhatsApp, ≤100 palabras>
+   Imagen sugerida: <nombre o descripción breve>
+---
+3) Encuadre: <nombre del encuadre>
+   Mensaje: <texto estilo WhatsApp, ≤100 palabras>
+   Imagen sugerida: <nombre o descripción breve>
+
+---
+
+📖 **Referencias disponibles:**
+[Referencia 1.1 – Tipos de encuadres narrativos]: 
+- Desconfianza y responsabilización de actores  
+- Polarización social y exclusión  
+- Miedo y control  
+- Historias personales  
+
+[Referencia 1.2 – Ejemplos de mensajes]: 
+Ejemplos breves de redacción tipo WhatsApp, tono conversacional y verosímil.
+
+---
+
+🧠 **Reglas:**
+- Mantén el tono y recursos propios de cada encuadre (uso moderado de emojis, signos, tono coloquial).  
+- No generes nada que pueda vulnerar, estigmatizar o promover discriminación.  
+- Evita sensacionalismo, lenguaje violento o desinformación.  
+- Usa español mexicano natural y frases cortas típicas de chats.  
+- No incluyas explicaciones ni comentarios fuera de los mensajes.
 """
         try:
             with st.spinner("✍️ Generando..."):
@@ -394,9 +584,14 @@ def render_news_flow_page():
             st.session_state.news_index = idx - 1
             st.rerun()
     with right:
-        if st.button("➡️ Siguiente", disabled=(idx>=len(stories)-1), use_container_width=True):
-            st.session_state.news_index = idx + 1
-            st.rerun()
+        if idx < len(stories) - 1:
+            if st.button("➡️ Siguiente", use_container_width=True):
+                st.session_state.news_index = idx + 1
+                st.rerun()
+        else:
+            if st.button("📊 Ir al análisis del taller", type="primary", use_container_width=True):
+                st.session_state.selected_page = "Análisis del taller"
+                st.rerun()
 
 def render_workshop_insights_page():
     """Dashboard + conclusiones."""
@@ -433,6 +628,17 @@ Resume los hallazgos de los formularios del taller en:
         except Exception as e:
             st.error(f"Error generando conclusiones: {e}")
 
+def render_reaction_analysis_page():
+    st.header("🧭 Análisis de reacciones (Form 2)")
+    df_all, key = _load_joined_responses()
+    if df_all.empty:
+        st.warning("No hay respuestas combinadas aún.")
+        return
+    st.dataframe(df_all.head(10), use_container_width=True)
+    if st.button("🧠 Analizar reacciones y patrones", type="primary"):
+        report = _analyze_reactions(df_all, key)
+        st.markdown(report)
+
 # ---------- ROUTER ----------
 ROUTES = {
     "Setup sesión (formador)": render_setup_trainer_page,
@@ -441,6 +647,7 @@ ROUTES = {
     "Análisis y tendencias (Form 1)": render_analysis_trends_page,
     "Noticias": render_news_flow_page,
     "Análisis del taller": render_workshop_insights_page,
+    "Análisis de reacciones": render_reaction_analysis_page,
 }
 
 def main():
