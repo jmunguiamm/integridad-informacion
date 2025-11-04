@@ -6,6 +6,9 @@ __pycache__/
 *.pyc
 DS_Store
 
+# Ignore local image assets
+images/
+
 # Local test scripts
 test_secrets.py
 
