@@ -1,13 +1,23 @@
-# app.py — Taller Integridad de la Información (versión con mejoras de navegación/QR/UX)
+# app.py — Taller Integridad de la Información (Streamlit router and layout only)
 
-import os, json, re, time
-from io import BytesIO
+import json
+import re
+import time
+import os
 import pandas as pd
 import streamlit as st
-import difflib
-from datetime import datetime
-from dateutil import parser as date_parser
 
+# ---------- IMPORTS FROM MODULES ----------
+from config.secrets import read_secrets, forms_sheet_id
+from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet
+from data.cleaning import normalize_form_data, filter_df_by_date
+from data.utils import get_date_column_name, normalize_date, get_available_workshop_dates, load_joined_responses
+from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
+from components.qr_utils import qr_image_for
+from components.navigation import navigation_buttons
+from components.utils import autorefresh_toggle
+from services.ai_analysis import get_openai_client, analyze_reactions, analyze_trends
+from services.news_generator import generate_news
 
 # ---------- CONFIG BÁSICA ----------
 st.set_page_config(
@@ -15,729 +25,84 @@ st.set_page_config(
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded",
-    )
+)
 
-# ---------- UTILIDADES ----------
-def _forms_sheet_id() -> str:
-    sid = _read_secrets("FORMS_SHEET_ID", "")
-    if not sid:
-        raise RuntimeError("Falta FORMS_SHEET_ID en secrets/env.")
-    return sid
+# ---------- ALIASES FOR BACKWARD COMPATIBILITY ----------
+# These allow existing code to work while we migrate
+_read_secrets = read_secrets
+_forms_sheet_id = forms_sheet_id
+_get_gspread_client = get_gspread_client
+_sheet_to_df = sheet_to_df
+_write_df_to_sheet = write_df_to_sheet
+_get_date_column_name = get_date_column_name
+_normalize_date = normalize_date
+_get_available_workshop_dates = get_available_workshop_dates
+_filter_df_by_date = filter_df_by_date
+_normalize_form_data = normalize_form_data
+_load_joined_responses = load_joined_responses
+_typing_then_bubble = typing_then_bubble
+_find_image_by_prefix = find_image_by_prefix
+_find_matching_image = find_matching_image
+_qr_image_for = qr_image_for
+_autorefresh_toggle = autorefresh_toggle
+_openai_client = get_openai_client
+_analyze_reactions = analyze_reactions
 
-def _read_secrets(key: str, default: str = ""):
-    """Lee secrets desde entorno o Streamlit Cloud."""
-    val = os.environ.get(key)
-    if val:
-        return val
-    try:
-        return st.secrets.get(key, default)
-    except Exception:
-        return default
+# ---------- HELPER FUNCTIONS (kept here for page-specific logic) ----------
+def _parse_news_blocks(raw: str):
+    """Extrae hasta 3 bloques de noticias y vincula imagen local según tags."""
+    import re, os
 
-@st.cache_resource(show_spinner=False)
-def _get_gspread_client():
-    """Cliente autenticado de Google Sheets."""
-    from google.oauth2.service_account import Credentials
-    import gspread
-    sa_json = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
-    if not sa_json:
-        raise RuntimeError("Falta GOOGLE_SERVICE_ACCOUNT en secrets/env.")
-    sa_info = json.loads(sa_json)
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
-    return gspread.authorize(creds)
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _sheet_to_df(sheet_id: str, tab: str) -> pd.DataFrame:
-    """Lee hoja de cálculo (nombre tolerante a errores comunes)."""
-    gc = _get_gspread_client()
-    sh = gc.open_by_key(sheet_id)
-    try:
-        return pd.DataFrame(sh.worksheet(tab).get_all_records())
-    except Exception:
-        for ws in sh.worksheets():
-            if tab.lower() in ws.title.lower():
-                return pd.DataFrame(ws.get_all_records())
-        ws = sh.get_worksheet(0)
-        st.warning(f"No se encontró la pestaña '{tab}'. Usando '{ws.title}'.")
-        return pd.DataFrame(ws.get_all_records())
-
-def _get_date_column_name(df: pd.DataFrame) -> str:
-    """Obtiene el nombre de la columna de fecha. Por defecto es 'Marca temporal' (primera columna de Google Forms)."""
-    if len(df.columns) == 0:
-        return None
-    
-    # La columna "Marca temporal" es típicamente la primera columna en Google Forms
-    first_col = df.columns[0]
-    
-    # Verificar si es "Marca temporal" o alguna variación (búsqueda flexible)
-    first_col_lower = first_col.lower()
-    if "marca temporal" in first_col_lower or "timestamp" in first_col_lower or "fecha" in first_col_lower or "date" in first_col_lower:
-        return first_col
-    
-    # Si no, buscar explícitamente en todas las columnas
-    for col in df.columns:
-        col_lower = col.lower()
-        if "marca temporal" in col_lower or "timestamp" in col_lower or (col == df.columns[0] and "fecha" in col_lower):
-            return col
-    
-    # Si no encuentra explícitamente, usar la primera columna (asumiendo que es la marca temporal por convención de Google Forms)
-    return first_col
-
-def _normalize_date(date_value) -> str:
-    """Normaliza una fecha a formato string YYYY-MM-DD para comparación."""
-    if pd.isna(date_value):
-        return None
-    
-    try:
-        if isinstance(date_value, str):
-            # Intentar parsear la fecha
-            parsed = date_parser.parse(date_value, fuzzy=True)
-            return parsed.strftime('%Y-%m-%d')
-        elif isinstance(date_value, (datetime, pd.Timestamp)):
-            return date_value.strftime('%Y-%m-%d')
-    except:
-        pass
-    
-    return str(date_value)
-
-def _get_available_workshop_dates():
-    """Obtiene las fechas disponibles del Form 0 para seleccionar talleres."""
-    FORMS_SHEET_ID = _forms_sheet_id()
-    FORM0_TAB = _read_secrets("FORM0_TAB", "")
-    
-    if not FORM0_TAB:
-        return []
-    
-    try:
-        df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
-        if df0.empty:
-            return []
-        
-        # Obtener columna de fecha (Marca temporal)
-        date_col = _get_date_column_name(df0)
-        if not date_col:
-            return []
-        
-        # Normalizar fechas y obtener valores únicos
-        df0['_normalized_date'] = df0[date_col].apply(_normalize_date)
-        df0 = df0.dropna(subset=['_normalized_date'])
-        
-        if df0.empty:
-            return []
-        
-        # Obtener fechas únicas ordenadas (más reciente primero)
-        unique_dates = sorted(df0['_normalized_date'].unique(), reverse=True)
-        return unique_dates
-        
-    except Exception as e:
-        st.warning(f"Error obteniendo fechas del Form 0: {e}")
+    if not isinstance(raw, str) or not raw.strip():
         return []
 
-def _filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
-    """Filtra un DataFrame por fecha usando la columna 'Marca temporal' (primera columna)."""
-    if df.empty or not target_date:
-        return df
-    
-    # Obtener columna de fecha (Marca temporal) - siempre usar la primera columna si no se encuentra explícitamente
-    date_col = _get_date_column_name(df)
-    
-    # Si no hay columna de fecha, usar la primera columna (asumiendo que es la marca temporal)
-    if not date_col and len(df.columns) > 0:
-        date_col = df.columns[0]
-    
-    if not date_col:
-        # Si realmente no hay columnas, retornar sin filtrar
-        return df
-    
-    # Normalizar fechas y filtrar
-    df_copy = df.copy()
-    try:
-        df_copy['_normalized_date'] = df_copy[date_col].apply(_normalize_date)
-        filtered = df_copy[df_copy['_normalized_date'] == target_date]
-        
-        if not filtered.empty:
-            filtered = filtered.drop(columns=['_normalized_date'])
-            return filtered
-    except Exception as e:
-        # Si hay error en el filtrado, retornar el DataFrame original
-        return df
-    
-    return pd.DataFrame()
+    parts = re.split(r'^\s*[-—]{3,}\s*$|\n{2,}', raw, flags=re.MULTILINE)
+    cleaned = []
 
-def _normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date: str = None, show_debug: bool = False):
-    """
-    Transforma Form1 y Form2 en formato normalizado según el esquema especificado.
-    
-    Args:
-        form1: DataFrame del Form1
-        form2: DataFrame del Form2
-        workshop_date: Fecha del taller para filtrar (opcional)
-        show_debug: Si True, muestra información de debug en Streamlit
-    
-    Returns:
-        Tupla (DataFrame normalizado, DataFrame largo intermedio) o DataFrame normalizado si show_debug=False
-        DataFrame normalizado con columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor
-    """
-    # Filtrar por fecha si se especifica
-    if workshop_date:
-        if show_debug:
-            st.write(f"🔍 Filtrando por fecha del taller: {workshop_date}")
-            st.write(f"  - Form1 antes del filtro: {len(form1)} filas")
-            st.write(f"  - Form2 antes del filtro: {len(form2)} filas")
-        
-        form1_filtered = _filter_df_by_date(form1.copy(), workshop_date)
-        form2_filtered = _filter_df_by_date(form2.copy(), workshop_date)
-        
-        if show_debug:
-            st.write(f"  - Form1 después del filtro: {len(form1_filtered)} filas")
-            st.write(f"  - Form2 después del filtro: {len(form2_filtered)} filas")
-            
-            if form1_filtered.empty:
-                st.warning("⚠️ Form1 quedó vacío después del filtrado por fecha. Verifica que la fecha coincida.")
-            if form2_filtered.empty:
-                st.warning("⚠️ Form2 quedó vacío después del filtrado por fecha. Verifica que la fecha coincida.")
-        
-        form1 = form1_filtered
-        form2 = form2_filtered
-    
-    # Verificar que los DataFrames no estén vacíos después del filtrado
-    if form1.empty:
-        if show_debug:
-            st.error("❌ Form1 está vacío. No se puede procesar.")
-        return (pd.DataFrame(), pd.DataFrame()) if show_debug else pd.DataFrame()
-    
-    if form2.empty:
-        if show_debug:
-            st.error("❌ Form2 está vacío. No se puede procesar.")
-        return (pd.DataFrame(), pd.DataFrame()) if show_debug else pd.DataFrame()
-    
-    # === 1️⃣ Preparar Form1 base ===
-    # Buscar columnas relevantes (flexible con nombres)
-    form1_cols = {col.lower(): col for col in form1.columns}
-    
-    if show_debug:
-        st.write("🔍 Buscando columnas en Form1...")
-        st.write(f"Total columnas: {len(form1.columns)}")
-    
-    # Buscar columna de tarjeta - buscar "tarjeta" en cualquier parte del nombre
-    tarjeta_col = None
-    for col in form1.columns:
-        col_lower = col.lower()
-        if "tarjeta" in col_lower:
-            tarjeta_col = col
-            if show_debug:
-                st.write(f"✅ Columna de tarjeta encontrada: '{col}'")
-            break
-    
-    # Si no encuentra, buscar por otros términos
-    if not tarjeta_col:
-        for key in ["número", "numero", "number", "card", "asignado"]:
-            for col in form1.columns:
-                col_lower = col.lower()
-                if key in col_lower:
-                    tarjeta_col = col
-                    if show_debug:
-                        st.write(f"✅ Columna de tarjeta encontrada (por '{key}'): '{col}'")
-                    break
-            if tarjeta_col:
-                break
-    
-    # Buscar columna de género
-    genero_col = None
-    for col in form1.columns:
-        col_lower = col.lower()
-        if "género" in col_lower or "genero" in col_lower:
-            genero_col = col
-            if show_debug:
-                st.write(f"✅ Columna de género encontrada: '{col}'")
-            break
-    
-    # Si no encuentra género, buscar por otros términos
-    if not genero_col:
-        for key in ["gender", "sexo", "identificas"]:
-            for col in form1.columns:
-                col_lower = col.lower()
-                if key in col_lower:
-                    genero_col = col
-                    if show_debug:
-                        st.write(f"✅ Columna de género encontrada (por '{key}'): '{col}'")
-                    break
-            if genero_col:
-                break
-    
-    # Obtener columna de marca temporal
-    marca_col = _get_date_column_name(form1)
-    
-    if show_debug:
-        st.write(f"📋 Columnas detectadas en Form1:")
-        st.write(f"  - Tarjeta: {tarjeta_col or '❌ NO ENCONTRADA'}")
-        st.write(f"  - Marca temporal: {marca_col or '❌ NO ENCONTRADA'}")
-        st.write(f"  - Género: {genero_col or '❌ NO ENCONTRADA'}")
-        if not marca_col:
-            st.write("🔍 Primeras columnas de Form1:")
-            for i, col in enumerate(form1.columns[:5], 1):
-                st.write(f"  {i}. '{col}'")
-    
-    if not tarjeta_col or not marca_col:
-        error_msg = f"No se encontraron columnas necesarias en Form1. Tarjeta: {tarjeta_col}, Marca temporal: {marca_col}"
-        if show_debug:
-            st.error(f"❌ {error_msg}")
-            st.write("📋 Todas las columnas de Form1:")
-            for i, col in enumerate(form1.columns, 1):
-                st.write(f"  {i}. '{col}'")
-        raise ValueError(error_msg)
-    
-    # Preparar base de Form1
-    form1_base_cols = [marca_col, tarjeta_col]
-    if genero_col:
-        form1_base_cols.append(genero_col)
-    
-    form1_base = form1[form1_base_cols].copy()
-    form1_base.columns = ["marca_temporal", "tarjeta"] + (["genero"] if genero_col else [])
-    form1_base["Taller"] = workshop_date or "T_001"
-    
-    # === 2️⃣ Mapeo de encuadres ===
-    encuadre_map = {
-        1: "Desconfianza y responsabilización de actores",
-        2: "Polarización social y exclusión",
-        3: "Miedo y control",
-    }
-    
-    # === 3️⃣ Patrones para identificar preguntas del Form2 ===
-    patterns = [
-        ("¿Qué emociones identificas en ti en reacción a la noticia? (1)", 1, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (1)", 1, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 1?", 1, "Confianza"),
-        ("¿Qué emociones identificas en ti en reacción a la noticia 2?", 2, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (2)", 2, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 2?", 2, "Confianza"),
-        ("¿Qué emociones identificas en ti en reacción a la noticia? (3)", 3, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (3)", 3, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 3?", 3, "Confianza"),
-    ]
-    
-    # === 4️⃣ Transformar Form2 en formato largo ===
-        # === 4️⃣ Transformar Form2 en formato largo ===
-    rows = []
-
-    # ✅ Buscar columna de tarjeta y marca temporal con los nombres reales detectados
-    tarjeta_col_f2 = "Ingresa el número asignado en la tarjeta que se te dio"
-    marca_col_f2 = "Marca temporal"
-
-    # ⚙️ Mapeo de encuadres (ya definido antes)
-    encuadre_map = {
-        1: "Desconfianza y responsabilización de actores",
-        2: "Polarización social y exclusión",
-        3: "Miedo y control",
-    }
-
-    # 🔍 Patrones de preguntas con su encuadre
-    patterns = [
-        ("¿Qué emociones identificas en ti en reacción a la noticia? (1)", 1, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (1)", 1, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 1?", 1, "Confianza"),
-        ("¿Qué emociones identificas en ti en reacción a la noticia 2?", 2, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (2)", 2, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 2?", 2, "Confianza"),
-        ("¿Qué emociones identificas en ti en reacción a la noticia? (3)", 3, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (3)", 3, "Elementos"),
-        ("¿Qué tan confiable consideras que es la información contenida en la noticia 3?", 3, "Confianza"),
-    ]
-
-    # ✅ Iterar filas de Form2
-    for _, row in form2.iterrows():
-        tarjeta = str(row.get(tarjeta_col_f2, "")).strip()
-        marca = row.get(marca_col_f2, None)
-
-        if not tarjeta or pd.isna(marca):
+    for p in parts:
+        t = (p or "").strip()
+        if not t or re.fullmatch(r'[-—\s]+', t):
             continue
 
-        for pattern_text, enc_id, pregunta in patterns:
-            matching_col = next((col for col in form2.columns if col.strip().lower() == pattern_text.strip().lower()), None)
-            if matching_col and pd.notna(row[matching_col]) and str(row[matching_col]).strip():
-                valor = str(row[matching_col]).strip()
-                rows.append({
-                    "Taller": workshop_date or "T_001",
-                    "Marca temporal": marca,
-                    "Encuadre": encuadre_map[enc_id],
-                    "Número de tarjeta": tarjeta,
-                    "Pregunta": pregunta,
-                    "Valor": valor
-                })
+        # Detectar tags sugeridos
+        img_tags_match = re.search(r'(?i)imagen\s+sugerida\s*\(.*?tags.*?\)\s*:\s*(.*)', t)
+        img_tags = []
+        if img_tags_match:
+            tag_str = img_tags_match.group(1)
+            img_tags = [w.strip() for w in re.split(r'[;,]', tag_str) if w.strip()]
+            # Elimina la sección desde "Imagen sugerida" hacia abajo del texto principal
+            t = re.split(r'(?i)imagen\s+sugerida', t)[0].strip()
 
-    # 🧩 Generar DataFrame final
-    df_long = pd.DataFrame(rows)
-    
-    if not rows:
-        if show_debug:
-            st.warning("⚠️ No se encontraron filas que coincidan con los patrones.")
-            st.write("📋 Patrones buscados:")
-            for pattern_text, enc_id, pregunta in patterns:
-                st.write(f"  - {pattern_text} (Encuadre {enc_id}, Tipo: {pregunta})")
-            st.write("📊 Columnas disponibles en Form2:")
-            for col in form2.columns:
-                st.write(f"  - '{col}'")
-        return (pd.DataFrame(), pd.DataFrame()) if show_debug else pd.DataFrame()
-    
-    df_long = pd.DataFrame(rows)
-    
-    if show_debug:
-        st.success(f"✅ Formato largo creado: {len(df_long)} filas")
-        st.write(f"📊 Columnas en df_long: {list(df_long.columns)}")
-        st.write(f"📈 Encuadres encontrados: {df_long['Encuadre'].unique()}")
-        st.write(f"📝 Preguntas encontradas: {df_long['Pregunta'].unique()}")
-    
-    # === 5️⃣ Agregar género desde Form1 ===
-    if genero_col and not form1_base.empty:
-        # Convertir tarjeta a string para hacer merge
-        form1_base["tarjeta"] = form1_base["tarjeta"].astype(str).str.strip()
-        df_long["Número de tarjeta"] = df_long["Número de tarjeta"].astype(str).str.strip()
-        
-        df_final = df_long.merge(
-            form1_base[["tarjeta", "genero"]],
-            left_on="Número de tarjeta",
-            right_on="tarjeta",
-            how="left"
-        ).drop(columns=["tarjeta"])
-    else:
-        df_final = df_long.copy()
-        df_final["genero"] = None
-    
-    # === 6️⃣ Ordenar y renombrar columnas ===
-    column_order = ["Taller", "Marca temporal", "Encuadre", "Número de tarjeta", "genero", "Pregunta", "Valor"]
-    df_final = df_final[column_order].rename(columns={"genero": "Género"})
-    
-        # === 7️⃣ Expandir filas con valores separados por coma ===
-    if "Valor" in df_final.columns:
-        # Separar por comas y eliminar espacios
-        df_final["Valor"] = df_final["Valor"].astype(str).apply(
-            lambda x: [v.strip() for v in x.split(",") if v.strip()]
-        )
-        # Explota listas en filas
-        df_final = df_final.explode("Valor", ignore_index=True)
+        # Limpiar encabezados y numeraciones al inicio
+        t = re.sub(r'\*{1,2}(?!\S)|(?<!\S)\*{1,2}', '', t)
+        t = re.sub(r'(?i)^\*\*noticia compartida en whatsapp\*\*\s*:?', '', t).strip()
+        # Eliminar encabezado tipo "Encuadre X:"
+        t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()
 
-    if show_debug:
-        return df_final, df_long
-    return df_final
+        # Eliminar líneas que son solo hashtags o encabezados markdown
+        lines = [ln for ln in t.splitlines() if ln.strip()]
+        cleaned_lines = []
+        for ln in lines:
+            s = ln.strip()
+            if re.fullmatch(r'(?:#\w+\s*){1,}', s):
+                continue
+            if re.match(r'^#{1,6}\s+', s):
+                continue
+            cleaned_lines.append(ln)
+        t = "\n".join(cleaned_lines).strip()
 
-def _write_df_to_sheet(sheet_id: str, tab_name: str, df: pd.DataFrame, clear_existing: bool = True):
-    """
-    Escribe un DataFrame a un tab de Google Sheets.
-    
-    Args:
-        sheet_id: ID del Google Sheet
-        tab_name: Nombre del tab (lo crea si no existe)
-        df: DataFrame a escribir
-        clear_existing: Si True, limpia el contenido existente antes de escribir
-    """
-    import gspread
-    try:
-        gc = _get_gspread_client()
-        sh = gc.open_by_key(sheet_id)
-        
-        # Intentar obtener el worksheet, si no existe, crearlo
-        try:
-            worksheet = sh.worksheet(tab_name)
-        except gspread.exceptions.WorksheetNotFound:
-            worksheet = sh.add_worksheet(title=tab_name, rows=1000, cols=20)
-        
-        # Limpiar contenido existente si se solicita
-        if clear_existing:
-            worksheet.clear()
-        
-        # Convertir DataFrame a lista de listas (incluyendo headers)
-        # 🧹 Limpiar valores problemáticos antes de exportar
-        df_clean = df.replace([float('inf'), float('-inf')], None).fillna("")
+        # Buscar imagen local si hay tags
+        image_path = _find_matching_image(img_tags) if img_tags else None
+        cleaned.append({
+            "text": t,
+            "image": image_path
+        })
+    for i, item in enumerate(cleaned):
+        fixed_image = f"images/taller{i+1}.jpeg"
+        if os.path.isfile(fixed_image):
+            item["image"] = fixed_image
+    return cleaned[:3]
 
-        # Convertir DataFrame a lista de listas (incluyendo headers)
-        values = [df_clean.columns.tolist()] + df_clean.astype(str).values.tolist()
-
-        
-        # Escribir datos
-        worksheet.update(values, value_input_option='RAW')
-        
-        return True
-    except Exception as e:
-        raise Exception(f"Error escribiendo a Google Sheets: {e}")
-
-
-def _autorefresh_toggle(key="auto_refresh_key", millis=60_000):
-    """Botón de auto-refresh opcional."""
-    auto = st.toggle("🔄 Auto-refresh cada 60s", value=False)
-    if auto:
-        try:
-            from streamlit_autorefresh import st_autorefresh
-            st_autorefresh(interval=millis, key=key)
-        except Exception:
-            st.info("Para auto-refresh instala `streamlit-autorefresh`.")
-    return auto
-
-def _find_image_by_prefix(prefix: str, folder="images"):
-    """Busca una imagen local que empiece con el prefijo indicado (ej. 'taller1')."""
-    import os
-    valid_exts = (".jpg", ".jpeg", ".png", ".gif", ".webp")
-    if not os.path.isdir(folder):
-        return None
-    for f in os.listdir(folder):
-        if f.lower().startswith(prefix.lower()) and f.lower().endswith(valid_exts):
-            return os.path.join(folder, f)
-    return None
-
-def _typing_then_bubble(
-    message_text: str,
-    image_path: str = None,
-    typing_path: str = "images/typing.gif",
-    encuadre: str = None,
-    ):
-    """
-    Muestra mensaje tipo WhatsApp con animación 'escribiendo…',
-    burbuja verde alineada a la derecha e imagen opcional dentro,
-    y una cajita superior con el tipo de encuadre si aplica.
-    """
-    import html, re, time, os
-
-    # --- Animación 'escribiendo...' (si existe el GIF) ---
-    if os.path.isfile(typing_path):
-        holder = st.empty()
-        with holder.container():
-            st.image(typing_path, width=60)
-            time.sleep(1.1)
-        holder.empty()
-
-    # --- Sanitizar texto y evitar inyección de HTML peligroso ---
-    # Elimina bloques prohibidos (script/iframe)
-    message_text = re.sub(r'<(script|iframe).*?>.*?</\1>', '', message_text, flags=re.I | re.S)
-    # Extrae de forma conservadora un posible bloque <div> embebido y lo elimina del texto
-    embedded_html = ""
-    html_match = re.search(r"(<div[^>]*?>[\s\S]*?</div>)", message_text, flags=re.I)
-    if html_match:
-        embedded_html = html_match.group(1)
-        message_text = message_text.replace(embedded_html, "")
-
-    # Escapa el resto para mostrarlo como texto dentro de la burbuja
-    safe_msg = html.escape(message_text, quote=False).replace("\n", "<br>")
-
-
-    # --- Cajita del encuadre (si aplica) ---
-    if encuadre:
-        st.markdown(
-            f"""
-            <div style="
-              background-color:#f1f0f0;
-              border-radius:8px;
-              padding:6px 12px;
-              text-align:center;
-              color:#333;
-              font-size:14px;
-              font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-              margin-bottom:8px;
-            ">
-              🗞️ <b>Encuadre:</b> {html.escape(encuadre)}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    enfoque_html = ""
-    if encuadre:
-        enfoque_html = f"""
-        <div style="
-        font-size:16px;
-        font-weight:600;
-        color:#0a0a0a;
-        margin-bottom:6px;
-        ">
-        {html.escape(encuadre)}
-        </div>
-        """
-    # --- Imagen tipo 'card' dentro del mensaje ---
-    img_html = ""
-    if image_path and os.path.isfile(image_path):
-        import base64
-        with open(image_path, "rb") as f:
-            img_base64 = base64.b64encode(f.read()).decode("utf-8")
-
-        img_html = f"""
-        <div style="
-        background-color:#fff;
-        border-radius:12px;
-        overflow:hidden;
-        margin-top:10px;
-        box-shadow:0 1px 3px rgba(0,0,0,0.15);
-        ">
-        <img src="data:image/jpeg;base64,{img_base64}" 
-            style="width:100%; display:block; border-bottom:1px solid #ddd; border-radius:12px;">
-        </div>
-        """
-
-    # --- Burbuja verde tipo WhatsApp ---
-    html_block = f"""
-    <div style="display:flex; justify-content:flex-end; margin:10px 0;">
-    <div style="
-        background-color:#dcf8c6;
-        border-radius:18px 18px 4px 18px;
-        padding:12px 16px;
-        max-width:90%;
-        font-family:'Roboto', system-ui, -apple-system, sans-serif;
-        font-size:15px;
-        color:#111;
-        line-height:1.5;
-        box-shadow:0 2px 4px rgba(0,0,0,0.2);
-        animation: fadeIn 0.4s ease-out;
-    ">
-        <div style="color:#777;font-size:12px;margin-bottom:4px;">↪︎↪︎ Reenviado muchas veces</div>
-        {enfoque_html}
-        {safe_msg}
-        {embedded_html}
-        {img_html}
-        <div style="text-align:right;color:#777;font-size:12px;margin-top:6px;">7:15 PM ✅✅</div>
-    </div>
-    </div>
-        <style>
-        @keyframes fadeIn {{
-            from {{opacity:0; transform:translateY(8px);}}
-            to {{opacity:1; transform:translateY(0);}}
-        }}
-        </style>
-        """
-    # Renderizamos como componente HTML para evitar que Markdown escape <img>
-    try:
-        import streamlit.components.v1 as components
-        # Altura estimada más generosa para dar espacio a imagen y texto
-        estimated_height = 900 if img_html else 550
-        components.html(html_block, height=estimated_height)
-    except Exception:
-        st.markdown(html_block, unsafe_allow_html=True)
-
-def _qr_image_for(url: str):
-    """Genera QR PNG de un link."""
-    try:
-        import qrcode
-        buf = BytesIO()
-        qrcode.make(url).save(buf, format="PNG")
-        return buf.getvalue()
-    except Exception:
-        return None
-
-@st.cache_resource(show_spinner=False)
-def _openai_client():
-    """Devuelve cliente OpenAI."""
-    from openai import OpenAI
-    api_key = _read_secrets("OPENAI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("Falta OPENAI_API_KEY.")
-    return OpenAI(api_key=api_key)
-
-def _load_joined_responses():
-    """Lee Form0, Form1, Form2 del MISMO Sheet (FORMS_SHEET_ID) y une por 'tarjeta'.
-    Filtra las respuestas por la fecha seleccionada en session_state."""
-    FORMS_SHEET_ID = _forms_sheet_id()
-
-    # Obtener la fecha del taller seleccionada
-    workshop_date = st.session_state.get("selected_workshop_date")
-    
-    forms = []
-    mapping = [
-        ("FORM0_TAB", "F0"),
-        ("FORM1_TAB", "F1"),
-        ("FORM2_TAB", "F2"),
-    ]
-    for tab_key, tag in mapping:
-        tab = _read_secrets(tab_key, "")
-        if not tab:
-            continue
-        try:
-            df = _sheet_to_df(FORMS_SHEET_ID, tab)
-            df.columns = [c.strip() for c in df.columns]
-            df["source_form"] = tag
-            
-            # Filtrar por fecha del taller seleccionada (excepto Form 0 que usamos como referencia)
-            if tag != "F0" and workshop_date:
-                df = _filter_df_by_date(df, workshop_date)
-            
-            forms.append(df)
-        except Exception as e:
-            st.warning(f"No pude leer pestaña {tab_key}='{tab}': {e}")
-
-    if not forms:
-        return pd.DataFrame(), None
-
-    df_all = pd.concat(forms, ignore_index=True)
-
-    # Detectar la columna clave de unión (número de tarjeta)
-    key_candidates = [c for c in df_all.columns if "tarjeta" in c.lower()]
-    if key_candidates:
-        key = key_candidates[0]
-        df_all[key] = df_all[key].astype(str).str.strip()
-    else:
-        key = None
-
-    return df_all, key
-
-def _analyze_reactions(df_all, key):
-    """Analyze reactions and patterns across Form 0–2 (para página Análisis de reacciones)."""
-    sample = df_all.head(200).to_dict(orient="records")
-    sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
-
-    prompt = f"""
-    Eres un analista de talleres educativos sobre desinformación.
-
-    Tienes datos combinados de tres formularios:
-    - [Form 0] Contexto del grupo y del docente.
-    - [Form 1] Percepciones de inseguridad y emociones previas.
-    - [Form 2] Reacciones ante las noticias con diferentes encuadres narrativos.
-
-    Cada fila puede estar vinculada por un número de tarjeta que representa a una persona.
-
-    Tu tarea:
-    1️⃣ Identifica patrones de reacción emocional ante las tres noticias (miedo, enojo, empatía, desconfianza, indiferencia, etc.).
-    2️⃣ Distingue qué encuadres (desconfianza, polarización, miedo/control, historia personal) provocaron más reacciones emocionales fuertes o reflexivas.
-    3️⃣ Detecta diferencias por contexto del grupo (según Form 0) y por percepciones iniciales (Form 1).
-    4️⃣ Resume los hallazgos en 4 secciones:
-    - “Principales patrones emocionales”
-    - “Comparación entre encuadres”
-    - “Factores del contexto que influyen”
-    - “Recomendaciones pedagógicas para la siguiente sesión”
-    5️⃣ Agrega un breve párrafo de síntesis general para el reporte final.
-
-    Datos:
-    {sample_txt}
-
-    Responde en Markdown estructurado.
-    """
-    client = _openai_client()
-    with st.spinner("🔎 Analizando reacciones y patrones..."):
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            temperature=0.4,
-            max_tokens=1200,
-            messages=[
-                {"role":"system","content":"Eres un analista pedagógico experto en alfabetización mediática."},
-                {"role":"user","content":prompt}
-            ]
-        )
-    return resp.choices[0].message.content.strip()
-
-def navigation_buttons(current_page: str, page_order: list[str]):
-    """
-    Show consistent navigation buttons across all pages.
-    Assumes you are using `st.session_state["current_page"]` to control navigation.
-    """
-    idx = page_order.index(current_page)
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        if idx > 0:
-            if st.button("⬅️ Volver", key=f"back_{current_page}"):
-                st.session_state["current_page"] = page_order[idx - 1]
-
-    with col2:
-        if idx < len(page_order) - 1:
-            if st.button("Siguiente ➡️", key=f"next_{current_page}"):
-                st.session_state["current_page"] = page_order[idx + 1]
 # ---------- PÁGINAS ----------
 
 def render_setup_trainer_page():
