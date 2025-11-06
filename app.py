@@ -18,6 +18,8 @@ from components.navigation import navigation_buttons
 from components.utils import autorefresh_toggle
 from services.ai_analysis import get_openai_client, analyze_reactions, analyze_trends
 from services.news_generator import generate_news
+from components.image_repo import get_images_for_dominant_theme
+
 
 # ---------- CONFIG BÁSICA ----------
 st.set_page_config(
@@ -50,12 +52,17 @@ _analyze_reactions = analyze_reactions
 
 # ---------- HELPER FUNCTIONS (kept here for page-specific logic) ----------
 def _parse_news_blocks(raw: str):
-    """Extrae hasta 3 bloques de noticias y vincula imagen local según tags."""
+    """
+    Extrae hasta 3 bloques de noticias y les asigna imágenes asociadas
+    al tema dominante actual del taller.
+    """
     import re, os
+    import streamlit as st
 
     if not isinstance(raw, str) or not raw.strip():
         return []
 
+    # 1️⃣ Separar el texto en bloques (cada noticia generada)
     parts = re.split(r'^\s*[-—]{3,}\s*$|\n{2,}', raw, flags=re.MULTILINE)
     cleaned = []
 
@@ -64,22 +71,13 @@ def _parse_news_blocks(raw: str):
         if not t or re.fullmatch(r'[-—\s]+', t):
             continue
 
-        # Detectar tags sugeridos
-        img_tags_match = re.search(r'(?i)imagen\s+sugerida\s*\(.*?tags.*?\)\s*:\s*(.*)', t)
-        img_tags = []
-        if img_tags_match:
-            tag_str = img_tags_match.group(1)
-            img_tags = [w.strip() for w in re.split(r'[;,]', tag_str) if w.strip()]
-            # Elimina la sección desde "Imagen sugerida" hacia abajo del texto principal
-            t = re.split(r'(?i)imagen\s+sugerida', t)[0].strip()
-
-        # Limpiar encabezados y numeraciones al inicio
+        # Limpiar encabezados y basura de formato
         t = re.sub(r'\*{1,2}(?!\S)|(?<!\S)\*{1,2}', '', t)
         t = re.sub(r'(?i)^\*\*noticia compartida en whatsapp\*\*\s*:?', '', t).strip()
-        # Eliminar encabezado tipo "Encuadre X:"
         t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()
+        t = re.sub(r'(?i)imagen\s+sugerida.*', '', t).strip()
 
-        # Eliminar líneas que son solo hashtags o encabezados markdown
+        # Eliminar hashtags o markdown
         lines = [ln for ln in t.splitlines() if ln.strip()]
         cleaned_lines = []
         for ln in lines:
@@ -91,40 +89,106 @@ def _parse_news_blocks(raw: str):
             cleaned_lines.append(ln)
         t = "\n".join(cleaned_lines).strip()
 
-        # Buscar imagen local si hay tags
-        image_path = _find_matching_image(img_tags) if img_tags else None
-        cleaned.append({
-            "text": t,
-            "image": image_path
-        })
+        cleaned.append({"text": t})
+
+    # 2️⃣ Obtener tema dominante actual
+    dominant_theme = st.session_state.get("dominant_theme", "").lower().strip()
+
+    # 3️⃣ Obtener hasta 3 imágenes desde el repositorio
+    theme_images = get_images_for_dominant_theme(dominant_theme)
+
+    # 4️⃣ Asignar imágenes en orden
     for i, item in enumerate(cleaned):
-        fixed_image = f"images/taller{i+1}.jpeg"
-        if os.path.isfile(fixed_image):
-            item["image"] = fixed_image
+        if i < len(theme_images):
+            item["image"] = theme_images[i]
+        else:
+            # Fallback si hay más textos que imágenes
+            fallback = f"images/taller{i+1}.jpeg"
+            item["image"] = fallback if os.path.isfile(fallback) else None
+
     return cleaned[:3]
 
 # ---------- PÁGINAS ----------
 
 def render_setup_trainer_page():
     """Setup del formador (Form 0)."""
-    st.header("🧩 Setup sesión — Formador")
+    st.markdown("""
+    <style>
+        .setup-header {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 600;
+            color: #004b8d;
+            margin-bottom: 0.2rem;
+        }
+        .setup-sub {
+            text-align: center;
+            color: #777;
+            margin-bottom: 2rem;
+            font-size: 16px;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .metric-row .metric {
+            background-color: #f0f4f8;
+            padding: 1rem;
+            border-radius: 10px;
+            flex: 1;
+            margin: 0 0.3rem;
+        }
+    </style>
+    <div class="setup-header">⚙️ Configuración del Taller</div>
+    <div class="setup-sub">Completa esta información antes de iniciar el taller.</div>
+    """, unsafe_allow_html=True)
+
     FORM0_URL = _read_secrets("FORM0_URL", "")
     FORMS_SHEET_ID = _forms_sheet_id()    
     FORM0_TAB = _read_secrets("FORM0_TAB", "")
     SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
     
-    cols = st.columns(4)
-    with cols[0]: st.metric("Form 0 URL", "OK" if FORM0_URL else "Falta")
-    with cols[1]: st.metric("Sheet ID", "OK" if FORMS_SHEET_ID else "Falta")
-    with cols[2]: st.metric("Worksheet", FORM0_TAB or "—")
-    with cols[3]: st.metric("ServiceAccount", "OK" if SA else "Falta")
-
-    if FORM0_URL:
-        qr = _qr_image_for(FORM0_URL)
-        if qr:
-            st.image(qr, caption="Escanea para abrir Form 0", width=220)
-        st.link_button("📝 Abrir Form 0", FORM0_URL, use_container_width=True)
     
+    if FORM0_URL:
+        st.markdown("### 📝 Formulario 0 — Contexto del grupo y del taller")
+
+        # --- Estilos para el contenedor ---
+        st.markdown("""
+        <style>
+        .form-embed {
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            margin-top: 0.5rem;
+            margin-bottom: 1.5rem;
+            height: 900px;
+        }
+        .form-embed iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # --- Iframe embebido del Formulario 0 ---
+        st.markdown(f"""
+        <div class="form-embed">
+            <iframe 
+                src="{FORM0_URL}?embedded=true"
+                frameborder="0" 
+                marginheight="0" 
+                marginwidth="0">
+                Cargando…
+            </iframe>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
+
     # Selector de fecha del taller
     st.markdown("---")
     st.subheader("📅 Seleccionar taller a analizar")
@@ -165,26 +229,59 @@ def render_setup_trainer_page():
 
 
 def render_introduction_page():
-    """🌎 Página de introducción con carrusel automático de imágenes locales."""
-    import os
+    """🌎 Página de introducción con presentación compacta."""
     import streamlit as st
     import streamlit.components.v1 as components
 
-    st.header("🌎 Introducción al Taller de Integridad de la Información")
-    st.markdown(
-        "Bienvenid@ al taller de **Integridad de la Información**. "
-        "Desliza las imágenes para conocer el contexto del proyecto y los pasos del ejercicio."
-        )
-
-    # --- Presentación AccLab (Google Slides embebida y adaptable) ---
-    st.markdown("### 🎞️ Presentación AccLab")
-    components.html(
-    """
+    # --- Apply tighter layout and reset top padding ---
+    st.markdown("""
     <style>
+    /* Container */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 0rem !important;
+        max-width: 900px !important;
+    }
+
+    /* Main title */
+    .intro-header {
+        text-align: center;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #004b8d;
+        margin-top: 2rem;       /* slightly lower the title */
+        margin-bottom: 0.5rem;
+    }
+    .intro-subtext {
+        text-align: center;
+        color: #333;
+        font-size: 1.05rem;
+        margin-bottom: 1.2rem;  /* reduced space under subtitle */
+    }
+
+    /* Presentation box */
+    .presentation-box {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 0.3rem 0.3rem 0.8rem 0.3rem; /* less vertical padding */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+        margin-bottom: 1rem; /* tighter spacing below */
+    }
+    .presentation-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 0.4rem;
+    }
+
+    /* Slides */
     .responsive-slides {
         position: relative;
         width: 100%;
-        padding-top: 56.25%; /* 16:9 ratio */
+        padding-top: 50%; /* slightly smaller height ratio */
+        border-radius: 8px;
+        overflow: hidden;
     }
     .responsive-slides iframe {
         position: absolute;
@@ -192,50 +289,60 @@ def render_introduction_page():
         left: 0;
         width: 100%;
         height: 100%;
-        transform: scale(1.5); /* adjust scale for better fit */
-        transform-origin: top left;
+        border: none;
     }
 
-    @media (max-width: 900px) {
-        .responsive-slides iframe {
-            transform: scale(0.7);
-        }
+    /* Section titles */
+    h2 {
+        color: #004b8d !important;
+        margin-top: 0.8rem !important;
+        margin-bottom: 0.4rem !important;
+    }
+
+    /* Paragraph text */
+    p {
+        font-size: 1.05rem;
+        color: #333;
+        line-height: 1.6;
+    }
+
+    /* Divider */
+    hr {
+        border: none;
+        border-top: 1px solid #e0e0e0;
+        margin: 1rem 0;
     }
     </style>
+    """, unsafe_allow_html=True)
 
-    <div class="responsive-slides">
-        <iframe 
-            src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000"
-            frameborder="0"
-            allowfullscreen>
-        </iframe>
-    </div>
-    """,
-    height=600,
+
+    # --- Header and intro text ---
+    st.markdown("## 🌎 Introducción al Taller de Integridad de la Información")
+    st.write(
+        "Bienvenid@ al taller de **Integridad de la Información**. "
+        "Desliza las imágenes para conocer el contexto del proyecto y los pasos del ejercicio."
     )
 
+    # --- Embedded Google Slides (reduced height) ---
+    st.markdown("### 🎞️ Presentación AccLab")
+    components.html(
+        """
+        <div class="responsive-slides">
+            <iframe 
+                src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000"
+                frameborder="0"
+                allowfullscreen>
+            </iframe>
+        </div>
+        """,
+        height=420,  # smaller height fixes spacing issue
+    )
 
-    # --- Buscar imágenes en carpeta /images ---
-    #img_folder = "images"
-    #supported_exts = (".jpg", ".jpeg", ".png", ".gif")
-    #if not os.path.isdir(img_folder):
-    #    os.makedirs(img_folder, exist_ok=True)
-
-    #all_imgs = [os.path.join(img_folder, f) for f in os.listdir(img_folder) if f.lower().endswith(supported_exts)]
-    #all_imgs.sort()  # orden alfabético
-
-    #if all_imgs:
-    #    st.markdown("### 📸 Galería del taller")
-     #   idx = st.slider("Desliza para explorar", 0, len(all_imgs)-1, 0, key="intro_slider")
-      #  caption = os.path.basename(all_imgs[idx]).replace("_", " ").replace("-", " ").rsplit(".", 1)[0].capitalize()
-       # st.image(all_imgs[idx], caption=caption, use_container_width=True)
-    #else:
-    #    st.warning("⚠️ No se encontraron imágenes en la carpeta `/images`. Agrega archivos .jpg, .png o .gif para mostrarlas aquí.")
-
+    # --- Propósito section (kept close to the slides) ---
     st.markdown("""
     ---
     ## 💡 Propósito
-    Este taller busca **entender cómo las narrativas cambian la forma en que percibimos las noticias**  
+    Este taller busca **entender cómo las narrativas cambian la forma en que percibimos las noticias**
     y desarrollar una mirada crítica frente a la desinformación y los sesgos informativos.
 
     ## 🧭 Estructura del taller
@@ -247,7 +354,16 @@ def render_introduction_page():
 
     🔔 **Consejo:** navega en orden desde el menú lateral para seguir la secuencia del taller.
     """)
-    navigation_buttons(current_page="Introducción al taller", page_order=list(ROUTES.keys()))
+
+        # --- Siguiente paso del taller (en la página principal) ---
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("### 🚀 Listo para continuar")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("Empezamos", use_container_width=True, type="primary"):
+            st.session_state.current_page = "Configuraciones"
+            st.rerun()
 
 
 def render_form1_page():
@@ -749,6 +865,24 @@ def render_news_flow_page():
     """Muestra 3 noticias tipo WhatsApp, con navegación y botón final a Análisis."""
     st.header("💬 Noticias del taller")
 
+        # 🧠 Mostrar información de depuración (solo visible al formador)
+    dominant_theme = st.session_state.get("dominant_theme", "(no definido)")
+    st.info(f"Tema dominante actual: **{dominant_theme}**")
+
+    # Debug visual opcional: listar imágenes detectadas para este tema
+    from components.image_repo import get_images_for_dominant_theme
+    theme_images = get_images_for_dominant_theme(dominant_theme)
+
+    if theme_images:
+        with st.expander("🖼️ Ver imágenes detectadas para este tema"):
+            st.markdown("Estas son las imágenes asociadas al tema dominante en `/images/`:")
+            cols = st.columns(min(len(theme_images), 3))
+            for i, img in enumerate(theme_images):
+                with cols[i % len(cols)]:
+                    st.image(img, caption=os.path.basename(img), use_container_width=True)
+    else:
+        st.warning("⚠️ No se encontraron imágenes asociadas a este tema dominante en `/images/`.")
+    
     # Mostrar subtítulo con el enfoque actual
     encuadres = [
         "Desconfianza y responsabilización de actores",
@@ -786,6 +920,14 @@ def render_news_flow_page():
         image_path=story.get("image"),
         encuadre=story.get("encuadre")
     )
+
+    # 🧩 Mostrar qué imagen se usó para esta noticia (debug)
+    used_image = story.get("image")
+    if used_image:
+        st.caption(f"🖼️ Imagen utilizada: `{os.path.basename(used_image)}`")
+    else:
+        st.caption("⚠️ No se asignó imagen específica (usando fallback o nula).")
+
     # Navegación
     left, right = st.columns(2)
     with left:
@@ -828,14 +970,14 @@ def render_explanation_page():
     En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final.
     """)
 
-    st.subheader("📰 Descripción de las noticias")
-    st.text_area("descripcion_noticias", "Aquí puedes incluir una descripción general de las noticias presentadas.", height=150)
+    st.subheader("📰 Hilo Conductor")
+    st.text_area("Lo que acabamos de ver", "Por ejemplo, los mensajes que vimos corresponden a un mismo evento pero con encuadres narrativos distintos.", height=150)
 
-    st.subheader("🧩 Descripción de los encuadres")
-    st.text_area("descripcion_encuadres", "Aquí puedes incluir una breve explicación sobre los encuadres utilizados (desconfianza, polarización, miedo).", height=150)
+    st.subheader("🧩 Descripción de que es un encuadre")
+    st.text_area("descripcion_encuadres", "Un encuadre narrativo es la técnica de enmarcar o delimitar la porción de realidad que se va a presentar en una historia, ya sea escrita o visual, influyendo en cómo el espectador o lector interpreta los eventos y emociones" , height=150)
 
-    st.subheader("🧠 TBD")
-    st.text_area("descripcion_tbd", "Contenido pendiente o personalizado según el grupo participante.", height=150)
+    st.subheader("Encuadres de la noticia")
+    st.text_area("descripcion_encuadres_usado", " Descripción del encuadre de desconfianza y responsabilización de actores. Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano. Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. Descripción del encuadre de  polarización social y exclusión. Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de 'enemigos'. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia.", height=150)
 
     st.markdown("---")
 
@@ -1010,7 +1152,7 @@ def render_workshop_insights_page():
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------
 ROUTES = {
-    "Cuestionario para formador": render_setup_trainer_page,      
+    "Configuraciones": render_setup_trainer_page,      
     "Introducción al taller": render_introduction_page,           
     "Cuestionario 1": render_form1_page,                          
     "Análisis y tema dominante": render_analysis_trends_page,   
@@ -1021,22 +1163,134 @@ ROUTES = {
 }
 
 def main():
+    import base64
+    import os
+
+    # --- Estado inicial: abrir en Introducción ---
     if "current_page" not in st.session_state:
-        st.session_state.current_page = list(ROUTES.keys())[0]
+        st.session_state.current_page = "Introducción al taller"
 
+    # --- SIDEBAR PERSONALIZADO ---
     with st.sidebar:
-        st.markdown("### 🧭 Navegación")
-        pages = list(ROUTES.keys())
-        idx = pages.index(st.session_state.current_page) if st.session_state.current_page in pages else 0
-        page = st.radio("Ir a", pages, index=idx, label_visibility="collapsed")
+        st.markdown("""
+        <style>
+        /* Sidebar background and layout */
+        [data-testid="stSidebar"] {
+            background-color: #f6f7f9 !important;
+            border-right: 1px solid #e0e0e0;
+            padding: 1.5rem 1rem 1rem 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* pushes content and logo apart */
+        }
 
-    st.session_state.current_page = page
+        /* Buttons */
+        [data-testid="stSidebar"] button {
+            border-radius: 10px !important;
+            font-weight: 500 !important;
+            margin-bottom: 0.4rem !important;
+            border: 1px solid #d8dee4 !important;
+            background-color: #ffffff !important;
+            color: #004b8d !important;
+        }
+        [data-testid="stSidebar"] button:hover {
+            background-color: #eaf2f8 !important;
+            border-color: #004b8d !important;
+        }
 
+        /* Current page text */
+        .sidebar-current {
+            text-align: center;
+            color: #555;
+            font-size: 14px;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Logo perfectly anchored at bottom */
+        .sidebar-logo {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: auto;        /* push logo to the bottom */
+            padding-top: 1rem;
+        }
+        .sidebar-logo img {
+            width: 100px;
+            opacity: 0.9;
+        }
+        [data-testid="stSidebar"] button[kind="primary"] {
+            background-color: #004b8d !important;
+            color: #ffffff !important;             /* White text */
+            border: none !important;
+            font-weight: 600 !important;           /* Slightly bolder text */
+            letter-spacing: 0.3px !important;
+        }
+        [data-testid="stSidebar"] button[kind="primary"]:hover {
+            background-color: #0062b5 !important;  /* Lighter blue on hover */
+            color: #ffffff !important;             /* Keep white text */
+        }
+
+        </style>
+        """, unsafe_allow_html=True)
+
+
+        # --- Botones principales ---
+        if st.button("🏠 Inicio", use_container_width=True):
+            st.session_state.current_page = "Introducción al taller"
+            st.rerun()
+
+        if st.button("⚙️ Configuraciones", use_container_width=True):
+            st.session_state.current_page = "Configuraciones"
+            st.rerun()
+
+        st.markdown("---")
+
+        # Mostrar la página actual
+        st.markdown(
+            f"<div class='sidebar-current'>Página actual:<br><b>{st.session_state.current_page}</b></div>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("---")
+
+        
+        # --- Botón "Siguiente paso del taller" ---
+        try:
+            page_keys = list(ROUTES.keys())
+            current_idx = page_keys.index(st.session_state.current_page)
+            if current_idx < len(page_keys) - 1:
+                next_page = page_keys[current_idx + 1]
+                
+                if st.button("➡️ Siguiente paso del taller", use_container_width=True, type="primary"):
+                    st.session_state.current_page = next_page
+                    st.rerun()
+        except ValueError:
+            st.warning("Página actual fuera del flujo del taller.")
+
+        st.markdown("---")
+
+        # Logo PNUD centrado
+        logo_path = "images/logo_pnud.jpeg"
+        if os.path.isfile(logo_path):
+            with open(logo_path, "rb") as f:
+                logo_b64 = base64.b64encode(f.read()).decode()
+            st.markdown(
+                f"""
+                <div class="sidebar-logo">
+                    <img src="data:image/jpeg;base64,{logo_b64}" alt="Logo PNUD">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # --- CONTENIDO PRINCIPAL ---
     if st.session_state.get("selected_page") in ROUTES:
         st.session_state.current_page = st.session_state.selected_page
         st.session_state.selected_page = None
 
     ROUTES.get(st.session_state.current_page, lambda: st.info("Selecciona una página."))()
+
 
 if __name__ == "__main__":
     main()
