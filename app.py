@@ -115,7 +115,7 @@ def render_setup_trainer_page():
     st.markdown("""
     <style>
         .setup-header {
-            text-align: center;
+        text-align: center;
             font-size: 28px;
             font-weight: 600;
             color: #004b8d;
@@ -124,22 +124,22 @@ def render_setup_trainer_page():
         .setup-sub {
             text-align: center;
             color: #777;
-            margin-bottom: 2rem;
+        margin-bottom: 2rem;
             font-size: 16px;
         }
         .metric-row {
             display: flex;
             justify-content: space-around;
-            text-align: center;
-            margin-bottom: 2rem;
-        }
+        text-align: center;
+        margin-bottom: 2rem;
+      }
         .metric-row .metric {
             background-color: #f0f4f8;
             padding: 1rem;
             border-radius: 10px;
             flex: 1;
             margin: 0 0.3rem;
-        }
+      }
     </style>
     <div class="setup-header">⚙️ Configuración del Taller</div>
     <div class="setup-sub">Completa esta información antes de iniciar el taller.</div>
@@ -152,7 +152,7 @@ def render_setup_trainer_page():
     
     
     if FORM0_URL:
-        st.markdown("### 📝 Formulario 0 — Contexto del grupo y del taller")
+        st.markdown("### 📝 Configuración: Paso 1 de 2 - Creación del taller")
 
         # --- Estilos para el contenedor ---
         st.markdown("""
@@ -191,7 +191,7 @@ def render_setup_trainer_page():
 
     # Selector de fecha del taller
     st.markdown("---")
-    st.subheader("📅 Seleccionar taller a analizar")
+    st.subheader("📅 Configuración: Paso 2 de 2 - Seleccionar taller a analizar")
     
     if FORMS_SHEET_ID and FORM0_TAB and SA:
         try:
@@ -318,32 +318,75 @@ def render_introduction_page():
 
     # --- Header and intro text ---
     st.markdown("## 🌎 Introducción al Taller de Integridad de la Información")
-    st.write(
-        "Bienvenid@ al taller de **Integridad de la Información**. "
-        "Desliza las imágenes para conocer el contexto del proyecto y los pasos del ejercicio."
+    st.markdown(
+        '<p style="font-size: 1.5rem; font-weight: 500;">Bienvenid@ al taller de <strong>Integridad de la Información</strong>.</p>',
+        unsafe_allow_html=True
     )
 
-    # --- Embedded Google Slides (reduced height) ---
-    st.markdown("### 🎞️ Presentación AccLab")
+    # --- Embedded Google Slides (responsive) ---
     components.html(
         """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%; /* 16:9 aspect ratio (9/16 = 0.5625) */
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
         <div class="responsive-slides">
-            <iframe 
-                src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000"
-                frameborder="0"
-                allowfullscreen>
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000" 
+                    allowfullscreen="true" 
+                    mozallowfullscreen="true" 
+                    webkitallowfullscreen="true">
             </iframe>
         </div>
         """,
-        height=420,  # smaller height fixes spacing issue
+        height=500,  # Altura del contenedor (el iframe se ajustará proporcionalmente)
     )
 
     # --- Propósito section (kept close to the slides) ---
     st.markdown("""
-    ---
+    <style>
+    .intro-content {
+        font-size: 1.2rem;
+        line-height: 1.8;
+    }
+    .intro-content h2 {
+        font-size: 2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .intro-content p {
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
+    }
+    .intro-content ul, .intro-content ol {
+        font-size: 1.2rem;
+    }
+    </style>
+    <div class="intro-content">
+    
     ## 💡 Propósito
+
     Este taller busca **entender cómo las narrativas cambian la forma en que percibimos las noticias**
     y desarrollar una mirada crítica frente a la desinformación y los sesgos informativos.
+
+    ## 📋 Instrucciones para el formador del taller
+    1️⃣ **Configura el taller** — Haz clic en el botón de configuración en el menú lateral y configura tu taller.  
+    2️⃣ **Selecciona la fecha del taller** — Esto servirá para la etapa de análisis de datos.  
+    3️⃣ **Reparte una tarjeta a cada participante** — El identificados de cada participante es el número asignado, así mantenemos los datos anonimizados.  
+    4️⃣ **Comparte el propósito con la audiencia** — Mantén un alto nivel de interactividad durante el taller.  
+    5️⃣ **Disfruta, aprende y comparte**
 
     ## 🧭 Estructura del taller
     1️⃣ **Cuestionario 1** — Percepciones de inseguridad y exposición a noticias.  
@@ -351,13 +394,12 @@ def render_introduction_page():
     3️⃣ **Cuestionario 2** — Reacciones de la audiencia.  
     4️⃣ **Noticias del taller** — Tres versiones de una noticia (WhatsApp).  
     5️⃣ **Análisis final del taller** — Dashboard + conclusiones.
-
-    🔔 **Consejo:** navega en orden desde el menú lateral para seguir la secuencia del taller.
-    """)
+    </div>
+    """, unsafe_allow_html=True)
 
         # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("### 🚀 Listo para continuar")
+    st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -1089,41 +1131,25 @@ def render_workshop_insights_page():
 
         # 5) Prompt unificado (hallazgos + patrones + preguntas de debate)
         prompt = f"""
-    Eres un analista de datos especializado en percepción social y comunicación.
-
     Contexto:
-    Se realizó un taller donde se generaron tres noticias diferentes sobre un mismo evento,
-    cada una con un encuadre narrativo distinto. Los participantes respondieron un formulario
-    indicando, para cada noticia: las emociones que sintieron, el grado de confiabilidad percibido,
-    y los elementos clave que les llamaron la atención.
-
-    Datos combinados (formularios 1 y 2) disponibles a continuación:
-    {sample_txt}
-
-    Tu tarea es elaborar un informe interpretativo estructurado en las siguientes secciones:
-
-    ### 1 Cruce de datos
-    - Une respuestas con el mismo número de tarjeta (misma persona).
-    - Asegúrate de mantener coherencia de género, emociones, encuadre percibido, y nivel de confianza.
-
-    ### 2 Análisis por encuadre narrativo
-    Objetivo: observar cómo varían las emociones, la confianza y los componentes clave según el encuadre.
-    Incluye en texto (no gráfico):
-    - Principales diferencias de emociones por encuadre.
-    - Diferencias en el nivel de confianza.
-    - Elementos clave más frecuentes por encuadre.
-    - Relacion entre genero y encuadre y emociones generadas
-    - Breve texto explicativo (3–5 líneas) que destaque hallazgos notables.
-
-    ### 3 Análisis por género–reacción emocional
-    Objetivo: detectar diferencias de percepción y reacción emocional según género.
-    Incluye:
-    - Comparación de emociones predominantes por género.
-    - Niveles de confianza promedio por género.
-    - Texto explicativo (3–5 líneas) con diferencias relevantes.
-    - 2 preguntas que fomenten reflexión (por ejemplo: ¿Cómo influye el género en la validación emocional o racional del mensaje?).
-
-
+    Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando, para cada noticia:
+    Emociones que sienten al leerla.
+    Grado de confiabilidad que perciben en la información.
+    Elementos clave que les llamaron la atención.
+    
+    Rol:
+    Eres un experto analista y data vizualization master, y tienes que presentar los hallazgos y informaciones mas relevantes segun la tabla de datos cruzados (por numero de tarjeta) que has construido entre form1 y form2 y usando contexto del form0.
+    Objetivo: analiza los siguientes puntos:
+    1- cómo varían las emociones, el nivel de confianza y los componentes clave según el tipo de encuadre narrativo.
+    2- que diferencias de percepción y reacción emocional a las noticias hay según el género.
+    3- patrones emergentes y relaciones significativas entre variables  y en función de las respuestas identifica algunos sesgos que puedan estar asociados que no se hayan abordado  en los análisis por encuadre y por género.
+    
+    Formato:
+    Genera por cada analisis un texto y un grafico explicativo
+    
+    Ejemplo:
+    Mapa de calor (heatmap) que muestre intensidad emocional por género
+    Boxplot o gráfico de violín para visualizar la dispersión del nivel de confianza por cada encuadre.
     Reglas:
     - Usa únicamente información derivada de los datos provistos.
     - Tono analítico y educativo, claro y sintético.
@@ -1169,6 +1195,26 @@ def main():
     # --- Estado inicial: abrir en Introducción ---
     if "current_page" not in st.session_state:
         st.session_state.current_page = "Introducción al taller"
+
+    # --- ESTILOS GLOBALES PARA BOTONES (fondo rojo y texto blanco) ---
+    st.markdown("""
+    <style>
+    /* Estilos globales para botones primarios */
+    .stButton > button[kind="primary"] {
+        background-color: #dc3545 !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 0.5rem !important;
+        transition: background-color 0.3s ease !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #c82333 !important;
+        color: #ffffff !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # --- SIDEBAR PERSONALIZADO ---
     with st.sidebar:
@@ -1220,14 +1266,14 @@ def main():
             opacity: 0.9;
         }
         [data-testid="stSidebar"] button[kind="primary"] {
-            background-color: #004b8d !important;
+            background-color: #dc3545 !important;  /* Red background */
             color: #ffffff !important;             /* White text */
             border: none !important;
             font-weight: 600 !important;           /* Slightly bolder text */
             letter-spacing: 0.3px !important;
         }
         [data-testid="stSidebar"] button[kind="primary"]:hover {
-            background-color: #0062b5 !important;  /* Lighter blue on hover */
+            background-color: #c82333 !important;  /* Darker red on hover */
             color: #ffffff !important;             /* Keep white text */
         }
 
