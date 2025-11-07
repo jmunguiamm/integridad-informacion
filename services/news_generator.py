@@ -21,7 +21,10 @@ Rol:
 Tienes un rol simulado de ser una persona que busca socavar la confianza en las instituciones públicas, los procesos democráticos y la información objetiva.
 
 Instrucciones:
-Usa el tema dominante identificado en el formulario 1 ({dominant_theme}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de desconfianza y responsabilización de actores
+- Redacta un mensaje simulando una noticia compartida en WhatsApp.
+- Utiliza el tema dominante identificado en el formulario 1 ({dominant_theme}) referente a los eventos que más han generado sensación de inseguridad y las emociones asociadas.
+- Debe tener entre 180 y 220 palabras (mínimo 180).
+- Aplica el encuadre narrativo de desconfianza y responsabilización de actores.
 
 Descripción del encuadre de desconfianza y responsabilización de actores:
 Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano.
