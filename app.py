@@ -4,6 +4,7 @@ import json
 import re
 import time
 import os
+import difflib
 import pandas as pd
 import streamlit as st
 
@@ -14,9 +15,14 @@ from data.cleaning import normalize_form_data, filter_df_by_date
 from data.utils import get_date_column_name, normalize_date, get_available_workshop_dates, load_joined_responses
 from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
 from components.qr_utils import qr_image_for
-from components.navigation import navigation_buttons
+from components.navigation import get_navigation_context
 from components.utils import autorefresh_toggle
-from services.ai_analysis import get_openai_client, analyze_reactions, analyze_trends
+from services.ai_analysis import (
+    get_openai_client,
+    analyze_reactions,
+    analyze_trends,
+    analyze_final_report,
+)
 from services.news_generator import generate_news
 from components.image_repo import get_images_for_dominant_theme
 
@@ -49,6 +55,7 @@ _qr_image_for = qr_image_for
 _autorefresh_toggle = autorefresh_toggle
 _openai_client = get_openai_client
 _analyze_reactions = analyze_reactions
+_analyze_final_report = analyze_final_report
 
 # ---------- HELPER FUNCTIONS (kept here for page-specific logic) ----------
 def _parse_news_blocks(raw: str):
@@ -144,6 +151,10 @@ def render_setup_trainer_page():
     <div class="setup-header">⚙️ Configuración del Taller</div>
     <div class="setup-sub">Completa esta información antes de iniciar el taller.</div>
     """, unsafe_allow_html=True)
+
+    if st.button("🏠 Volver a la introducción", use_container_width=True):
+        st.session_state.current_page = "Introducción al taller"
+        st.rerun()
 
     FORM0_URL = _read_secrets("FORM0_URL", "")
     FORMS_SHEET_ID = _forms_sheet_id()    
@@ -323,37 +334,6 @@ def render_introduction_page():
         unsafe_allow_html=True
     )
 
-    # --- Embedded Google Slides (responsive) ---
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%; /* 16:9 aspect ratio (9/16 = 0.5625) */
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000" 
-                    allowfullscreen="true" 
-                    mozallowfullscreen="true" 
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,  # Altura del contenedor (el iframe se ajustará proporcionalmente)
-    )
-
     # --- Propósito section (kept close to the slides) ---
     st.markdown("""
     <style>
@@ -397,15 +377,40 @@ def render_introduction_page():
     </div>
     """, unsafe_allow_html=True)
 
+ # --- Embedded Google Slides (responsive) ---
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%; /* 16:9 aspect ratio (9/16 = 0.5625) */
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000" 
+                    allowfullscreen="true" 
+                    mozallowfullscreen="true" 
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,  # Altura del contenedor (el iframe se ajustará proporcionalmente)
+    )
         # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("Empezamos", use_container_width=True, type="primary"):
-            st.session_state.current_page = "Configuraciones"
-            st.rerun()
 
 
 def render_form1_page():
@@ -446,7 +451,6 @@ def render_form1_page():
             st.warning("No hay respuestas para este taller en el rango de fechas.")
     except Exception as e:
         st.error(f"Error leyendo Cuestionario 1: {e}")
-    navigation_buttons(current_page="Cuestionario 1", page_order=list(ROUTES.keys()))
 
 
 def render_analysis_trends_page():
@@ -487,11 +491,14 @@ def render_analysis_trends_page():
         st.info("Sin respuestas aún para este taller.")
         return
     
+    context_text = ""
     if not df0.empty:
         context_text = "\n".join([
             f"{i+1}) " + " | ".join([f"{k}={v}" for k, v in row.items()])
             for i, row in enumerate(df0.to_dict('records')[:30])
         ])
+
+    st.session_state["form0_context_text"] = context_text
 
   
     # ---- OpenAI: análisis de tema dominante + WordCloud ----
@@ -648,14 +655,11 @@ def render_analysis_trends_page():
   # ➜ Guarda el tema dominante para usarlo en Cuestionario 2
     st.session_state["dominant_theme"] = dom
 
-    # ➜ Botón para ir a "Cuestionario 2"
     st.markdown("---")
-    if st.button("👉 Vamos al siguiente punto", type="primary", use_container_width=True):
-        st.session_state.selected_page = "Cuestionario 2"
-        st.rerun()
+    st.caption("Usa las flechas de la barra lateral para continuar con el siguiente paso del taller.")
 
 def render_form2_page():
-    """Cuestionario 2 — QR y botón para pasar a noticias."""
+    """Cuestionario 2 — QR y guía para continuar con noticias."""
     st.header("📲 Cuestionario 2 — reacciones ante noticias")
 
     FORM2_URL = _read_secrets("FORM2_URL", "")
@@ -671,160 +675,16 @@ def render_form2_page():
     dom = st.session_state.get("dominant_theme")
     if not dom:
         st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
-        if st.button("Ir a ‘Análisis y tema dominante’", use_container_width=True):
-            st.session_state.selected_page = "Análisis y tema dominante (Form 1)"
-            st.rerun()
+        st.caption("Usa la flecha izquierda en la barra lateral para regresar a esa sección.")
         return
 
-    # ✅ Este bloque debe estar dentro de la función
-    if st.button("🔎 Mostrar noticias sobre este tema", type="primary", use_container_width=True):
-        try:
-            client = _openai_client()
-            dom = st.session_state.get("dominant_theme", "inseguridad")
-            st.info(f"Generando noticias simuladas basadas en el tema dominante: **{dom}**")
-
-            prompts = [
-            # 🧩 Prompt 1 — Desconfianza y responsabilización de actores
-            f"""
-    Contexto general:
-    Previamente se realizó un ejercicio en donde se identificaron los tópicos  dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
-    Rol: 
-    Tienes un rol simulado de ser una persona que busca  socavar la confianza en las instituciones públicas, los procesos democráticos y la información objetiva.
-    
-    Instrucciones:
-    Usa el tema dominante identificado en el formulario 1 ({dom}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de desconfianza y responsabilización de actores
-    
-    Descripción del encuadre de desconfianza y responsabilización de actores:
-    Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano.
-    Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. 
-
-    Elementos del encuadre:
-    Atribuye la responsabilidad a ciertos actores, culpando y/o exigiendo.
-    Usa un lenguaje causal  (“por”, “debido a”, “por culpa de”).
-    Orienta desconfianza institucional.
-    Puede reforzar la rendición de cuentas o culpabilización
-    Duda sobre la imparcialidad o transparencia institucional.
-    Utiliza un lenguaje de reclamo generalizado (“todos son corruptos”, “nunca dicen la verdad”, “siempre han sido ladrones”, “siempre lucran con nuestra confianza”).
-    Usa referencias a traición, manipulación o colusión.
-    Suele deslegitimar fuentes oficiales o periodísticas, justificando que estas están cooptadas y manipuladas.
-    Suele tener presencia de emojis con expresión escéptica o de advertencia (🤔 😒 ⚠️ 👀).
-    Usa signos como “¿?”, “…” y “—” para enfatizar la sospecha o ironía.
-    Incorpora mayúsculas parciales o exclamaciones para representar tono de hartazgo y desconfianza.
-    
-    Ejemplos de noticias con Encuadre de Desconfianza Institucional:
-    Ya ni la hacen. A vecinos de la 14 Sur les vaciaron la casa ayer a plena luz del día… ¡Y NI UNA PATRULLA LLEGÓ!. Dicen que los ladrones ya habían sido denunciados, pero la policía “no tenía pruebas”🤔. ¿De qué sirve reportar si al final son los mismos policías los que les dan el pitazo para que roben?😒 Todo es un teatro, por culpa de la autoridad los ciudadanos terminamos despojados de nuestro patrimonio y con miedo a las represalias si denunciamos. Es mentira que los índices delictivos han bajado, ⚠️ no creas en fuentes oficiales, mantente vigilante y no confíes ni en la autoridad ⚠️ .
-
-    ⚠️ Entérate ⚠️. 
-    Detuvieron a unos del cártel en la carretera, pero al día siguiente… ¡ya estaban libres! Siempre es igual, los gobernantes dicen que combaten el narco, pero seguro alguien les pagó y los dejaron libres. Las autoridades solo hacen operativos para la foto 😒, mientras los verdaderos jefes siguen mandando. ¿Y así quieren que sigamos creyendo en ellos? Ya no vamos a confiar en los traidores, siempre lucran con nuestra confianza, entregan a los buenos y consienten a los malos. Debemos buscar un cambio, ya no confiar en los de siempre, que vean que ellos no son los que mandan, el pueblo manda y podemos quitar a cualquier autoridad que no atienda lo que el pueblo exige. 
-    
-    Limitaciones:
-    No generes nada que pueda vulnerar o promover discriminación.
-    Evita reproducir estigmas, lenguaje violento o discriminatorio.
-    Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz. 
-    """,
-
-                # 🧩 Prompt 2 — Polarización social y exclusión
-                f"""
-    Previamente se realizó un ejercicio en donde se identificaron los tópicos  dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
-    Rol: 
-    Tienes un rol simulado de ser una persona que busca reproducir estigmas y fomenta la deshumanización de un grupo en específico, buscan mantener el status quo y desestimar cualquier intento del otro grupo a través de la polarización. 
-    
-    Instrucciones:
-    Usa el tema dominante identificado en el formulario 1 ({dom}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas  y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de  polarización social y exclusión
-
-    Descripción del encuadre de  polarización social y exclusión:
-    Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de “enemigos”. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia. 
-
-    Elementos clave del mensaje whatsapp:
-    Lenguaje emocional o alarmista.
-    Contraposición de grupos (ellos/nosotros).
-    Reforzamiento de prejuicios o resentimientos.
-    Búsqueda de validación emocional.
-    Culpabilización generalizada (“los jóvenes”, “los migrantes”, etc.).
-    Emojis de conflicto o ira (😡 😤 🔥 ⚔️ 💣 🚫).
-    Mayúsculas parciales y exclamaciones para enfatizar antagonismo.
-
-    Ejemplo de estilo (NO copiar literalmente):**
-        🔥 ¡OTRA VEZ! Robaron una casa en la 14 Sur… 😡 Y claro, fueron esos tipos que andan de vagos todo el día, los mismos de siempre. Nosotros, los que trabajamos, los que nos levantamos temprano, los que luchamos por salir adelante… ¿Y ellos? Viendo a quién quitarle lo poco que tenemos. 😤 ¡YA BASTA!
-    🚫 Nadie dice nada, porque “pobrecitos”… que son gente sin oportunidades que hay que tenerles compasión… ¡Siempre hay una excusa para justificar lo injustificable! Mientras tanto, NOSOTROS seguimos perdiendo. 💣
-    ¿Hasta cuándo vamos a seguir permitiendo esto? ¿Hasta cuándo van a seguir tapando a esa gente que solo trae problemas? 🔥 Cada semana es lo mismo: robo, violencia, miedo… y siempre los mismos rostros, los mismos grupos. ¡Ellos destruyen, nosotros reconstruimos! ⚔️
-    💥 ¡Ya no es coincidencia, es una estrategia! Nos están dejando sin seguridad, sin paz, sin dignidad. Y todo por proteger a quienes no respetan nada. ¡NO MÁS SILENCIO! ¡NO MÁS COMPLICIDAD!
-
-
-    😡 ¡YA NO HAY QUE PERMITIRLES LA ENTRADA! 😡
-    La gente de fuera está ARRUINANDO TODO. Nosotros, los de aquí, los que queremos vivir en paz, los que respetamos… y ellos, con sus camionetas de lujo, su prepotencia, su dinero sucio, comprando voluntades, corrompiendo a medio mundo. 🔥 ¡Nos están invadiendo! 💣
-    ⚠️ Vienen con sonrisas, pero detrás traen destrucción. Pervierten a nuestros jóvenes, los seducen con promesas falsas, los meten en sus negocios turbios… ¡Y los matan! 😤 ¿Dónde quedó la tranquilidad del barrio? ¿Dónde están los valores que nos enseñaron?
-    Y lo peor… ¡todavía hay quienes los defienden! Como si fueran héroes, como si trajeran progreso. 🚫 ¡NO! Lo único que traen es decadencia, violencia, desorden. Por su culpa, los jóvenes ya no quieren estudiar, ya no sueñan con ser doctores o maestros… ahora solo quieren ser como ellos: sin valores, sin moral, peligrosos. ⚔️
-    💥 ¡Nos están robando el futuro! Y mientras tanto, los que deberían protegernos miran para otro lado. ¡BASTA YA! 😡🔥
-
-
-    Limitaciones
-    No generes nada que pueda vulnerar o promover discriminación.
-    Evita reproducir estigmas, lenguaje violento o discriminatorio.
-    Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz.
-    """,
-
-                # 🧩 Prompt 3 — Miedo y control
-                f"""
-    Contexto general:
-    Previamente se realizó un ejercicio en donde se identificaron los tópicos  dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
-   
-    Rol: 
-    Tienes un rol simulado de ser una persona que usa el miedo como herramienta de persuasión y parálisis.
-
-    Instrucciones:
-    Usa el tema dominante identificado en el formulario 1 ({dom}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas  y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de miedo y control  
-
-    Descripción de encuadre de miedo y control:
-    Exagera el peligro o amenaza para justificar medidas extremas, autoritarias o de control. 
-
-    Elementos clave del encuadre:
-    - Lenguaje apocalíptico o totalizador (“todos”, “nunca”).
-    - Ausencia de datos verificables.
-    - Justificación del control o vigilancia.
-    - Signos de urgencia: “‼️”, “❗❗❗”, “…”, “!!!”.
-    - Emojis de alarma: 😱 😨 💀 🚨 💣 🔒 📹 🔔.
-    - Mayúsculas parciales para enfatizar tono de alarma.
-
-    Ejemplo de estilo (NO copiar literalmente):**
-    🚨 Anoche hubo una balacera, dicen que nadie puede salir.  
-    Esto ya se salió de control. Mejor cuídense y no abran a nadie.  
-    😨 Nadie está a salvo, esto apenas empieza…
-
-    Limitaciones
-    No generes nada que pueda vulnerar o promover discriminación.
-    Evita reproducir estigmas, lenguaje violento o discriminatorio.
-    Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz.
-    """
-        ]
-
-            generated_blocks = []
-            for idx, ptext in enumerate(prompts, start=1):
-                with st.spinner(f"🧩 Generando Noticia {idx}…"):
-                    resp = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        temperature=0.55,
-                        messages=[
-                            {"role": "system", "content": "Asistente educativo experto en comunicación social y desinformación."},
-                            {"role": "user", "content": ptext},
-                        ],
-                        )
-                    result = resp.choices[0].message.content.strip()
-                    generated_blocks.append(f"Encuadre {idx}:\n{result}")
-                    st.success(f"✅ Noticia {idx} lista.")
-
-            # 🔗 Guarda los tres bloques concatenados y pasa a Noticias del taller (después de generar las 3)
-            st.session_state.generated_news_raw = "\n\n---\n\n".join(generated_blocks)
-            st.session_state.news_index = 0
-            st.session_state.selected_page = "Noticias del taller"
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error generando noticias: {e}")
+    st.caption("Averigue que todo el mundo tenga abierto este formulario. Luego, avanza con la flecha derecha de la barra lateral para ir a las noticias.")
 
 
 def _find_matching_image(tags: list[str], folder="images"):
     """Busca en /images una imagen cuyo nombre contenga alguno de los tags indicados."""
     import os
+    import difflib
     if not os.path.isdir(folder):
         return None
 
@@ -904,16 +764,38 @@ def _parse_news_blocks(raw: str):
 
 
 def render_news_flow_page():
-    """Muestra 3 noticias tipo WhatsApp, con navegación y botón final a Análisis."""
+    """Muestra 3 noticias tipo WhatsApp y permite generarlas desde esta página."""
     st.header("💬 Noticias del taller")
 
-        # 🧠 Mostrar información de depuración (solo visible al formador)
-    dominant_theme = st.session_state.get("dominant_theme", "(no definido)")
+    dominant_theme = st.session_state.get("dominant_theme")
+    generate_disabled = dominant_theme is None
+
+    if st.button("🔎 Mostrar noticias sobre este tema", type="primary", use_container_width=True, disabled=generate_disabled):
+        if generate_disabled:
+            st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
+        else:
+            try:
+                with st.spinner("Generando noticias simuladas…"):
+                    raw_news = generate_news(dominant_theme)
+                if raw_news:
+                    st.session_state.generated_news_raw = raw_news
+                    st.session_state.news_index = 0
+                    st.success("✅ Noticias generadas. Usa las flechas de la barra lateral para recorrerlas.")
+                else:
+                    st.warning("No se recibió contenido para las noticias.")
+            except Exception as e:
+                st.error(f"Error generando noticias: {e}")
+
+    st.markdown("---")
+
+    if not dominant_theme:
+        st.warning("⚠️ Aún no se ha identificado el tema dominante. Regresa a ‘Análisis y tema dominante’.")
+        return
+
     st.info(f"Tema dominante actual: **{dominant_theme}**")
 
-    # Debug visual opcional: listar imágenes detectadas para este tema
     from components.image_repo import get_images_for_dominant_theme
-    theme_images = get_images_for_dominant_theme(dominant_theme)
+    theme_images = get_images_for_dominant_theme(dominant_theme or "")
 
     if theme_images:
         with st.expander("🖼️ Ver imágenes detectadas para este tema"):
@@ -925,22 +807,11 @@ def render_news_flow_page():
     else:
         st.warning("⚠️ No se encontraron imágenes asociadas a este tema dominante en `/images/`.")
     
-    # Mostrar subtítulo con el enfoque actual
-    encuadres = [
-        "Desconfianza y responsabilización de actores",
-        "Polarización social y exclusión",
-        "Miedo y control",
-    ]
-    idx = int(st.session_state.get("news_index", 0))
-    if idx < len(encuadres):
-        st.markdown(f"### 🗞️ Encuadre {idx+1}: {encuadres[idx]}")
-    else:
-        st.info("No hay noticias disponibles.")
-        return
+    st.markdown("---")
 
     raw = st.session_state.get("generated_news_raw")
     if not raw:
-        st.info("Genera primero desde 'Análisis y tema dominante' (o vuelve si ya generaste).")
+        st.info("Haz clic en el botón superior para generar las noticias basadas en el tema dominante.")
         return
 
     stories = _parse_news_blocks(raw)
@@ -954,7 +825,14 @@ def render_news_flow_page():
         idx = 0
         st.session_state.news_index = 0
 
-    # Render del mensaje actual (con imagen de prueba si existe)
+    encuadres = [
+        "Desconfianza y responsabilización de actores",
+        "Polarización social y exclusión",
+        "Miedo y control",
+    ]
+    if idx < len(encuadres):
+        st.markdown(f"### 🗞️ Encuadre {idx + 1}: {encuadres[idx]}")
+
     story = stories[idx]
 
     _typing_then_bubble(
@@ -963,30 +841,14 @@ def render_news_flow_page():
         encuadre=story.get("encuadre")
     )
 
-    # 🧩 Mostrar qué imagen se usó para esta noticia (debug)
     used_image = story.get("image")
     if used_image:
         st.caption(f"🖼️ Imagen utilizada: `{os.path.basename(used_image)}`")
     else:
         st.caption("⚠️ No se asignó imagen específica (usando fallback o nula).")
 
-    # Navegación
-    left, right = st.columns(2)
-    with left:
-        if st.button("⬅️ Anterior", disabled=(idx==0), use_container_width=True):
-            st.session_state.news_index = idx - 1
-            st.rerun()
-    with right:
-        if idx < len(stories) - 1:
-            if st.button("➡️ Siguiente", use_container_width=True):
-                st.session_state.news_index = idx + 1
-                st.rerun()
-        else:
-            if st.button("📘 Explicación del taller", type="primary", use_container_width=True):
-                st.session_state.selected_page = "Explicación del taller"
-                st.rerun()
+    st.caption("Usa las flechas de la barra lateral para ver la noticia anterior o la siguiente.")
 
-    # Contador (opcional) cuando estás en la última noticia
     if idx == len(stories) - 1:
         st.markdown("---")
         st.subheader("📊 Participación del grupo (respuestas finales)")
@@ -995,7 +857,6 @@ def render_news_flow_page():
         if FORMS_SHEET_ID and FORM2_TAB:
             try:
                 df2 = _sheet_to_df(FORMS_SHEET_ID, FORM2_TAB)
-                # Filtrar por fecha del taller seleccionada
                 workshop_date = st.session_state.get("selected_workshop_date")
                 if workshop_date:
                     df2 = _filter_df_by_date(df2, workshop_date)
@@ -1022,6 +883,11 @@ def render_explanation_page():
     st.text_area("descripcion_encuadres_usado", " Descripción del encuadre de desconfianza y responsabilización de actores. Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano. Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. Descripción del encuadre de  polarización social y exclusión. Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de 'enemigos'. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia.", height=150)
 
     st.markdown("---")
+
+
+def render_workshop_insights_page():
+    """Dashboard + (debajo) síntesis automática con datos reales (Form 0/1/2/3/4 si están conectados)."""
+    st.header("📊 Análisis final del taller")
 
     st.subheader("📊 Preparar datos para el análisis final")
 
@@ -1060,21 +926,13 @@ def render_explanation_page():
                 )
 
             st.success("✅ Datos guardados en 'Datos Centralizados Form2'. ¡Listos para Looker!")
-
-            # Ir a análisis final
-            st.session_state.selected_page = "Análisis final del taller"
-            st.rerun()
-
         except Exception as e:
             st.error(f"❌ Error procesando datos: {e}")
             import traceback
             with st.expander("Detalles del error"):
                 st.code(traceback.format_exc())
 
-
-def render_workshop_insights_page():
-    """Dashboard + (debajo) síntesis automática con datos reales (Form 0/1/2/3/4 si están conectados)."""
-    st.header("📊 Análisis final del taller")
+    st.markdown("---")
 
     # --- Dashboard (estático) ---
     st.subheader("Dashboard (Looker Studio)")
@@ -1082,9 +940,34 @@ def render_workshop_insights_page():
         import streamlit.components.v1 as components
         components.html(
             """
-           <iframe width="600" height="450" src="https://lookerstudio.google.com/embed/reporting/cba53d78-d687-4929-aed6-dfb683841f06/page/p_cbx8w44sxd" frameborder="0" style="border:0" allowfullscreen sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <style>
+            .responsive-report {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%; /* 16:9 ratio */
+                height: 0;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+            }
+            .responsive-report iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-report">
+            <iframe src="https://lookerstudio.google.com/embed/reporting/cba53d78-d687-4929-aed6-dfb683841f06/page/p_cbx8w44sxd"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
             """,
-            height=640
+            height=520
         )
     except Exception:
         st.info("Agrega aquí el embed público de tu reporte de Looker Studio.")
@@ -1121,59 +1004,85 @@ def render_workshop_insights_page():
 
         # 2) Muestra un vistazo mínimo (opcional)
         with st.expander("👀 Muestra de datos combinados utilizados (primeras 10 filas)"):
-            st.dataframe(df_all.head(50), use_container_width=True)
-        
+            df_preview = df_all
+            if workshop_date:
+                if "Taller" in df_all.columns:
+                    df_preview = df_all[df_all["Taller"] == workshop_date]
+                else:
+                    date_col = _get_date_column_name(df_all)
+                    if date_col:
+                        df_dates = df_all.copy()
+                        df_dates["_normalized_date"] = df_dates[date_col].apply(_normalize_date)
+                        df_preview = df_dates[df_dates["_normalized_date"] == workshop_date]
+                        if df_preview.empty:
+                            df_preview = df_all
+            st.dataframe(df_preview.head(50), use_container_width=True)
+        # 3) Separar formularios para normalización y contexto
+        def _extract_form(df_source, tag):
+            if "source_form" not in df_source.columns:
+                return pd.DataFrame()
+            subset = df_source[df_source["source_form"] == tag].copy()
+            if subset.empty:
+                return pd.DataFrame()
+            return subset.drop(columns=["source_form"], errors="ignore")
 
-        
-        # 4) Prepara muestra textual (capada) para el prompt
-        sample_records = df_all.head(220).to_dict(orient="records")
-        sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample_records)])
+        df_form0 = _extract_form(df_all, "F0")
+        df_form1 = _extract_form(df_all, "F1")
+        df_form2 = _extract_form(df_all, "F2")
 
-        # 5) Prompt unificado (hallazgos + patrones + preguntas de debate)
-        prompt = f"""
-    Contexto:
-    Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando, para cada noticia:
-    Emociones que sienten al leerla.
-    Grado de confiabilidad que perciben en la información.
-    Elementos clave que les llamaron la atención.
-    
-    Rol:
-    Eres un experto analista y data vizualization master, y tienes que presentar los hallazgos y informaciones mas relevantes segun la tabla de datos cruzados (por numero de tarjeta) que has construido entre form1 y form2 y usando contexto del form0.
-    Objetivo: analiza los siguientes puntos:
-    1- cómo varían las emociones, el nivel de confianza y los componentes clave según el tipo de encuadre narrativo.
-    2- que diferencias de percepción y reacción emocional a las noticias hay según el género.
-    3- patrones emergentes y relaciones significativas entre variables  y en función de las respuestas identifica algunos sesgos que puedan estar asociados que no se hayan abordado  en los análisis por encuadre y por género.
-    
-    Formato:
-    Genera por cada analisis un texto y un grafico explicativo
-    
-    Ejemplo:
-    Mapa de calor (heatmap) que muestre intensidad emocional por género
-    Boxplot o gráfico de violín para visualizar la dispersión del nivel de confianza por cada encuadre.
-    Reglas:
-    - Usa únicamente información derivada de los datos provistos.
-    - Tono analítico y educativo, claro y sintético.
-    - Responde en Markdown estructurado.
-    """
+        if df_form1.empty or df_form2.empty:
+            st.warning("No hay datos suficientes de Form1 o Form2 para generar el análisis.")
+            return
 
+        # 4) Construir bloque de noticias para el análisis final
+        news_blocks = []
+        raw_news = st.session_state.get("generated_news_raw")
+        encuadres_catalog = [
+            "Desconfianza y responsabilización de actores",
+            "Polarización social y exclusión",
+            "Miedo y control",
+        ]
+        if raw_news:
+            parsed_news = _parse_news_blocks(raw_news)
+            for idx, block in enumerate(parsed_news):
+                enc = encuadres_catalog[idx] if idx < len(encuadres_catalog) else block.get("encuadre") or f"Encuadre {idx+1}"
+                news_blocks.append({
+                    "encuadre": enc,
+                    "text": block.get("text", "")
+                })
+
+        # 5) Contexto del Form 0 en caso de que no esté disponible en sesión
+        form0_context_text = st.session_state.get("form0_context_text", "")
+        if not form0_context_text and not df_form0.empty:
+            form0_context_text = "\n".join([
+                f"{i+1}) " + " | ".join([f"{k}={v}" for k, v in row.items() if pd.notna(v)])
+                for i, row in enumerate(df_form0.to_dict('records')[:30])
+            ])
+
+        # 6) Normalizar datos para el análisis final
+        try:
+            df_normalized = _normalize_form_data(df_form1, df_form2, workshop_date)
+        except Exception as e:
+            st.error(f"No se pudieron normalizar los datos: {e}")
+            return
+
+        if isinstance(df_normalized, pd.DataFrame) and df_normalized.empty:
+            st.warning("La normalización devolvió un conjunto vacío. Revisa que Form1/Form2 tengan respuestas válidas.")
+            return
+
+        dominant_theme = st.session_state.get("dominant_theme", "(tema dominante no definido)")
 
         try:
-            client = _openai_client()
-            with st.spinner("Procesando respuestas y generando interpretación…"):
-                resp = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    temperature=0.4,
-                    max_tokens=1300,
-                    messages=[
-                        {"role": "system",
-                         "content": "Eres un facilitador pedagógico. Estructuras ideas con claridad y neutralidad."},
-                        {"role": "user", "content": prompt},
-                    ],
+            with st.spinner("📊 Generando análisis final con IA…"):
+                report = _analyze_final_report(
+                    df_long_normalized=df_normalized,
+                    dominant_theme=dominant_theme,
+                    news_blocks=news_blocks,
+                    form0_context_text=form0_context_text,
                 )
-            st.markdown(resp.choices[0].message.content.strip())
+            st.markdown(report)
         except Exception as e:
             st.error(f"Error generando interpretación automática: {e}")
-    navigation_buttons(current_page="Análisis final del taller", page_order=list(ROUTES.keys()))
 
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------
@@ -1216,6 +1125,44 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
+    # --- TIPOGRAFÍA GLOBAL (alineada con la introducción) ---
+    st.markdown("""
+    <style>
+    body, p, li {
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif !important;
+        font-size: 1.2rem !important;
+        line-height: 1.8 !important;
+        color: #333333 !important;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif !important;
+        color: #004b8d !important;
+        font-weight: 600 !important;
+        margin-top: 1.2rem !important;
+        margin-bottom: 0.6rem !important;
+    }
+    h1 { font-size: 2.4rem !important; }
+    h2 { font-size: 2rem !important; }
+    h3 { font-size: 1.6rem !important; }
+
+    ul, ol {
+        margin-left: 1.5rem !important;
+        font-size: 1.2rem !important;
+        line-height: 1.8 !important;
+    }
+    a {
+        color: #004b8d !important;
+        text-decoration: none !important;
+    }
+    strong {
+        color: #1f2a44 !important;
+    }
+    [data-testid="stMarkdownContainer"] code {
+        font-size: 1rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # --- SIDEBAR PERSONALIZADO ---
     with st.sidebar:
         st.markdown("""
@@ -1224,7 +1171,7 @@ def main():
         [data-testid="stSidebar"] {
             background-color: #f6f7f9 !important;
             border-right: 1px solid #e0e0e0;
-            padding: 1.5rem 1rem 1rem 1rem;
+            padding: 1.2rem 1rem 1rem 1rem;
             display: flex;
             flex-direction: column;
             justify-content: space-between; /* pushes content and logo apart */
@@ -1234,23 +1181,36 @@ def main():
         [data-testid="stSidebar"] button {
             border-radius: 10px !important;
             font-weight: 500 !important;
-            margin-bottom: 0.4rem !important;
+            margin-bottom: 0.25rem !important;
             border: 1px solid #d8dee4 !important;
             background-color: #ffffff !important;
             color: #004b8d !important;
+        }
+        [data-testid="stSidebar"] button:disabled {
+            background-color: #f2f3f5 !important;
+            color: #9aa5b1 !important;
+            border-color: #e0e6ee !important;
+            cursor: not-allowed !important;
+            opacity: 0.8 !important;
         }
         [data-testid="stSidebar"] button:hover {
             background-color: #eaf2f8 !important;
             border-color: #004b8d !important;
         }
 
+        .sidebar-arrow-caption {
+            font-size: 0.85rem;
+            color: #4a5568;
+            margin-top: 0.15rem;
+            text-align: center;
+        }
         /* Current page text */
         .sidebar-current {
             text-align: center;
             color: #555;
             font-size: 14px;
-            margin-top: 0.5rem;
-            margin-bottom: 0.5rem;
+            margin-top: 0.4rem;
+            margin-bottom: 0.4rem;
         }
 
         /* Logo perfectly anchored at bottom */
@@ -1300,31 +1260,60 @@ def main():
 
         st.markdown("---")
 
-        
-        # --- Botón "Siguiente paso del taller" ---
+        page_keys = list(ROUTES.keys())
         try:
-            page_keys = list(ROUTES.keys())
-            current_idx = page_keys.index(st.session_state.current_page)
-            if current_idx < len(page_keys) - 1:
-                next_page = page_keys[current_idx + 1]
-                
-                if st.button("➡️ Siguiente paso del taller", use_container_width=True, type="primary"):
-                    st.session_state.current_page = next_page
-                    st.rerun()
+            nav_ctx = get_navigation_context(st.session_state.current_page, page_keys)
         except ValueError:
+            nav_ctx = None
+
+        if nav_ctx:
+            current_page = st.session_state.current_page
+            news_raw = st.session_state.get("generated_news_raw")
+            news_blocks = _parse_news_blocks(news_raw) if (current_page == "Noticias del taller" and news_raw) else []
+            news_index = int(st.session_state.get("news_index", 0))
+            news_count = len(news_blocks)
+            news_mode = current_page == "Noticias del taller" and news_count > 0
+
+            has_prev_news = news_mode and news_index > 0
+            has_next_news = news_mode and news_index < news_count - 1
+
+            prev_disabled = not has_prev_news and not nav_ctx["previous"]
+            next_disabled = not has_next_news and not nav_ctx["next"]
+
+            nav_cols = st.columns(2, gap="small")
+            with nav_cols[0]:
+                if st.button("⬅️", use_container_width=True, disabled=prev_disabled, key="sidebar_prev"):
+                    if has_prev_news:
+                        st.session_state.news_index = news_index - 1
+                        st.rerun()
+                    elif nav_ctx["previous"]:
+                        st.session_state.current_page = nav_ctx["previous"]
+                        st.rerun()
+                st.markdown('<div class="sidebar-arrow-caption">Anterior</div>', unsafe_allow_html=True)
+
+            with nav_cols[1]:
+                if st.button("➡️", use_container_width=True, disabled=next_disabled, key="sidebar_next"):
+                    if has_next_news:
+                        st.session_state.news_index = news_index + 1
+                        st.rerun()
+                    elif nav_ctx["next"]:
+                        st.session_state.current_page = nav_ctx["next"]
+                        st.rerun()
+                st.markdown('<div class="sidebar-arrow-caption">Siguiente</div>', unsafe_allow_html=True)
+        else:
             st.warning("Página actual fuera del flujo del taller.")
 
         st.markdown("---")
 
         # Logo PNUD centrado
-        logo_path = "images/logo_pnud.jpeg"
+        logo_path = "images/PNUD_logo.png"
         if os.path.isfile(logo_path):
             with open(logo_path, "rb") as f:
                 logo_b64 = base64.b64encode(f.read()).decode()
             st.markdown(
                 f"""
                 <div class="sidebar-logo">
-                    <img src="data:image/jpeg;base64,{logo_b64}" alt="Logo PNUD">
+                    <img src="data:image/png;base64,{logo_b64}" alt="Logo PNUD">
                 </div>
                 """,
                 unsafe_allow_html=True

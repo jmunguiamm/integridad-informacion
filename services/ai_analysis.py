@@ -133,3 +133,111 @@ def analyze_trends(form1_sample, form0_context):
     data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
     return data
 
+def analyze_final_report(
+    df_long_normalized,        # DataFrame largo: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor
+    dominant_theme: str,       # st.session_state["dominant_theme"]
+    news_blocks: list[dict],   # [{'encuadre': '...', 'text': '...'}, ...] (3 items)
+    form0_context_text: str = ""  # (opcional) contexto de Form 0 en crudo o resumido
+) -> str:
+    """
+    Genera el informe final (texto + instrucciones de gráficos) usando IA,
+    con contexto del tema dominante, textos y encuadres de las noticias y
+    respuestas del Form 2 normalizadas (cruzadas con Form 1/0).
+    Devuelve Markdown estructurado.
+    """
+    import pandas as pd
+    import textwrap
+
+    # 1) Compactar tablas a un muestreo legible para el prompt
+    #    (evita toquetazos enormes; priorizamos filas recientes o primeras N)
+    if isinstance(df_long_normalized, pd.DataFrame) and not df_long_normalized.empty:
+        # Reducir a ~250 filas máximo para mantener prompt controlado
+        df_sample = df_long_normalized.head(250).copy()
+        # Exportar a CSV inline (más legible que JSON para ojos humanos del modelo)
+        csv_preview = df_sample.to_csv(index=False)
+    else:
+        csv_preview = "(sin datos normalizados)"
+
+    # 2) Estructurar bloque de noticias (encuadre + texto)
+    news_summaries = []
+    for i, nb in enumerate(news_blocks, start=1):
+        enc = (nb.get("encuadre") or f"Noticia {i}").strip()
+        txt = (nb.get("text") or "").strip()
+        # Truncar cada noticia a ~900 caracteres por seguridad
+        if len(txt) > 900:
+            txt = txt[:900] + "…"
+        news_summaries.append(f"- {enc}:\n{txt}")
+
+    news_block_txt = "\n\n".join(news_summaries) if news_summaries else "(no hay noticias generadas)"
+
+    # 3) Construir prompt EXACTO según tus instrucciones
+    prompt = f"""
+Contexto:
+Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento,
+cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando,
+para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y
+(c) elementos clave que llamaron su atención.
+
+Rol:
+Eres un analista senior en ciencia de datos y visualización. Debes construir un informe profundo y accionable
+por cada taller registrado, articulando los hallazgos con el tema dominante y el contexto narrativo de las noticias generadas.
+
+Insumos clave del taller:
+- Tema dominante (derivado del análisis previo): "{dominant_theme}"
+- Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+- Noticias generadas (encuadre + texto):
+{news_block_txt}
+
+Datos normalizados de respuestas (CSV; columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor):
+{csv_preview}
+
+Metodología de análisis requerida:
+1) Trabaja taller por taller: identifica cada valor único de "Taller" y sintetiza las particularidades del grupo.
+2) Describe cómo las emociones, la confianza y los elementos clave varían según encuadre dentro de cada taller.
+3) Relaciona explícitamente los resultados con el tema dominante y con los fragmentos narrativos de las noticias; menciona coincidencias y tensiones.
+4) Analiza diferencias relevantes por género dentro de cada taller y compara entre talleres si emergen contrastes significativos.
+5) Destaca patrones transversales, correlaciones o sesgos latentes que surjan al cruzar las variables (incluyendo género, encuadre y valores reportados), señalando posibles riesgos o oportunidades del taller.
+6) Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
+
+Objetivo del análisis (entregar texto + un gráfico explicativo por cada punto):
+1) Cómo varían las emociones, el nivel de confianza y los componentes clave según el tipo de encuadre narrativo.
+2) Diferencias de percepción y reacción emocional a las noticias según el género.
+3) Patrones emergentes y relaciones significativas entre variables; a partir de ellos, identifica sesgos posibles que no se hayan abordado en los análisis por encuadre y por género.
+
+Formato de salida:
+Devuelve **Markdown estructurado**, con secciones claras. Dentro de cada sección, menciona explícitamente los aprendizajes por taller (usa subtítulos o párrafos separados para cada taller cuando corresponda):
+## Variación por encuadre
+- Texto analítico sintético (2–4 párrafos).
+- Sugerencia de gráfico y por qué (por ejemplo: boxplot/violín para confianza por encuadre; barras apiladas para elementos).
+## Diferencias por género
+- Texto analítico sintético (2–3 párrafos).
+- Sugerencia de gráfico y por qué (por ejemplo: heatmap de intensidad emocional por género).
+## Patrones y sesgos emergentes
+- Texto analítico (2–4 párrafos), señalando relaciones y sesgos potenciales derivados de las respuestas.
+
+Reglas de estilo tipográfico (alineadas con la interfaz):
+- Usa encabezados y subtítulos siguiendo la jerarquía Markdown indicada.
+- Redacta los párrafos en un tono analítico, con frases completas y claras.
+- Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
+- Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
+- Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
+
+Reglas:
+- Usa únicamente información derivada de los datos provistos (no inventes).
+- Tono analítico y educativo, claro y sintético.
+- No incluyas código en la respuesta; solo recomendaciones de visualización y narrativa.
+- Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
+"""
+
+    client = get_openai_client()
+    with st.spinner("📊 Generando análisis final con IA…"):
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            temperature=0.35,
+            max_tokens=1400,
+            messages=[
+                {"role": "system", "content": "Eres un analista senior en ciencia de datos y visualización."},
+                {"role": "user", "content": textwrap.dedent(prompt).strip()},
+            ],
+        )
+    return resp.choices[0].message.content.strip()
