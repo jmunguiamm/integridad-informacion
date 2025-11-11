@@ -23,7 +23,11 @@ from services.ai_analysis import (
     analyze_reactions,
     analyze_trends,
     analyze_final_report,
+    analyze_emotions_json,
+    analyze_gender_impacts_json,
+    analyze_general_json
 )
+
 from services.news_generator import generate_news
 from components.image_repo import get_images_for_dominant_theme
 
@@ -234,13 +238,27 @@ def render_setup_trainer_page():
                     st.session_state.selected_workshop_date = available_dates[0]
                 
                 # Selector de fecha
-                selected_date = st.selectbox(
-                    "Selecciona la fecha del taller a analizar:",
-                    options=available_dates,
-                    index=0 if st.session_state.selected_workshop_date not in available_dates 
-                           else available_dates.index(st.session_state.selected_workshop_date),
-                    help="Las respuestas de Form 1 y Form 2 se filtrarán por esta fecha."
-                )
+                display_dates = sorted(available_dates, reverse=True)
+
+                cols = st.columns([4, 1])
+                with cols[0]:
+                    selected_date = st.selectbox(
+                        "Selecciona la fecha del taller a analizar:",
+                        options=display_dates,
+                        index=0 if st.session_state.selected_workshop_date not in display_dates 
+                               else display_dates.index(st.session_state.selected_workshop_date),
+                        help="Las respuestas de Form 1 y Form 2 se filtrarán por esta fecha."
+                    )
+                with cols[1]:
+                    if st.button("🔄", help="Actualizar lista de talleres"):
+                        try:
+                            st.cache_data.clear()
+                            st.session_state.pop("available_dates_cache", None)
+                            st.session_state.pop("selected_workshop_date", None)
+                            st.success("Lista actualizada. Vuelve a seleccionar un taller.")
+                            st.rerun()
+                        except Exception as refresh_error:
+                            st.error(f"No se pudo refrescar la lista: {refresh_error}")
                 
                 # Actualizar session_state
                 st.session_state.selected_workshop_date = selected_date
@@ -755,7 +773,37 @@ def render_neutral_news_page():
     if workshop_date:
         st.caption(f"Contextualizas esta noticia para el taller del {workshop_date}.")
 
-    
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ0HN5LTFvxYBD3Nif-gin4m9ljOLr_u5Q5w_k4HiffpsySnqCjrRzQpVTKyNMeTS_RmKHsfI4eQ2gq/pubembed?start=false&loop=false&delayms=3000"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,
+    )
+
     neutral_news = st.session_state.get("neutral_news_text")
     if neutral_news:
         st.subheader("📄 Última noticia generada")
@@ -846,6 +894,36 @@ def render_form2_page():
     else:
         st.warning("Configura FORM2_URL en secrets para mostrar el QR y el enlace.")
 
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRaebZz22IS0wvo2TCloAKiyWxMNVryduW0ZcoQaNwZRwAkSZSDy3thcf3IcJua-64lHH7LQb2czPkx/pubembed?start=false&loop=false&delayms=3000"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,
+    )
     st.markdown("---")
     dom = st.session_state.get("dominant_theme")
     if not dom:
@@ -1021,7 +1099,6 @@ def render_news_flow_page():
 def render_news_comparison_page():
     """Visualiza las tres versiones de la noticia para comparar encuadres."""
     st.header("🔍 Comparativa de encuadres")
-    
 
     news_blocks = st.session_state.get("generated_news_blocks")
     if not news_blocks:
@@ -1030,6 +1107,37 @@ def render_news_comparison_page():
 
     st.caption("1. Observa cómo cambia la narrativa del mismo hecho según el encuadre.")
     st.caption("2. Utiliza esta comparativa para discutir tono, sesgos y emociones que provoca cada versión.")
+
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ1An6Z_P3J6W-zSxWSkPmRG2qZrCeLMZASNo_2mv-SLUY77LkMIITcqWy4-bEJrLtyPq2kpR4MUEjl/pubembed?start=false&loop=false&delayms=3000"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,
+    )
 
     for block in news_blocks:
         _typing_then_bubble(
@@ -1042,7 +1150,37 @@ def render_news_comparison_page():
 def render_explanation_page():
     """📘 Página intermedia entre Noticias y Análisis final."""
     st.header("📘 Explicación del Taller")
-
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTkU-vW_Gll9JioqavlZZe_DzkO3s_pnQ9cMEZLJaQ5SdOVRq2ihCXsMbKl8WderKhff6sWAqXO7YgS/pubembed?start=false&loop=false&delayms=3000"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,
+    )
+    
     st.markdown("""
     En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final.
     """)
@@ -1062,6 +1200,11 @@ def render_explanation_page():
 def render_workshop_insights_page():
     """Dashboard + (debajo) síntesis automática con datos reales (Form 0/1/2/3/4 si están conectados)."""
     st.header("📊 Análisis final del taller")
+    from services.ai_analysis import (
+            analyze_emotions_json,
+            analyze_gender_impacts_json,
+            analyze_general_json
+    )
 
     st.subheader("📊 Preparar datos para el análisis final")
 
@@ -1115,9 +1258,39 @@ def render_workshop_insights_page():
     st.markdown("---")
 
     # --- Dashboard (estático) ---
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <style>
+            .responsive-slides {
+                position: relative;
+                width: 100%;
+                padding-bottom: 56.25%;
+                height: 0;
+                overflow: hidden;
+            }
+            .responsive-slides iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        </style>
+        <div class="responsive-slides">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQeTeCMGumZ5X4xw0Yv4M20siYdt6_hWaXc4BvdXnRJ6HmMZRWMoZFBE7hF6EE8E13mV92hUZyooqeQ/pubembed?start=false&loop=false&delayms=3000"
+                    allowfullscreen="true"
+                    mozallowfullscreen="true"
+                    webkitallowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=500,
+    )
+
     st.subheader("Dashboard (Looker Studio)")
     try:
-        import streamlit.components.v1 as components
         components.html(
             """
         <style>
@@ -1167,6 +1340,8 @@ def render_workshop_insights_page():
 
     if st.button("🔎 Analizar respuestas", type="primary", use_container_width=True):
         # 1) Lee datos combinados
+        df_all = None
+        join_key = None
         try:
             df_all_key = _load_joined_responses()
             # Compat: tu helper puede devolver (df_all, key) o solo df. Normalicemos:
@@ -1176,6 +1351,10 @@ def render_workshop_insights_page():
                 df_all, join_key = df_all_key, None
         except Exception as e:
             st.error(f"No pude cargar datos combinados: {e}")
+            return
+
+        if df_all is None:
+            st.warning("No se recibieron datos combinados para analizar.")
             return
 
         if isinstance(df_all, pd.DataFrame) and df_all.empty:
@@ -1197,6 +1376,7 @@ def render_workshop_insights_page():
                         if df_preview.empty:
                             df_preview = df_all
             st.dataframe(df_preview.head(50), use_container_width=True)
+
         # 3) Separar formularios para normalización y contexto
         def _extract_form(df_source, tag):
             if "source_form" not in df_source.columns:
@@ -1263,6 +1443,56 @@ def render_workshop_insights_page():
             st.markdown(report)
         except Exception as e:
             st.error(f"Error generando interpretación automática: {e}")
+
+        # Persistir datos para los análisis adicionales
+        st.session_state["analysis_df_all"] = df_all
+        st.session_state["analysis_df_normalized"] = df_normalized
+        st.session_state["analysis_form0_context"] = form0_context_text
+
+    df_all_cached = st.session_state.get("analysis_df_all")
+    form0_context_cached = st.session_state.get("analysis_form0_context", "")
+    dominant_theme_cached = st.session_state.get("dominant_theme", "")
+
+    st.markdown("### Analizar emociones por encuadre")
+    with st.expander("¿Qué calcula este análisis?"):
+        st.markdown(
+            "Explora cómo varían las emociones reportadas por las y los participantes según el encuadre de cada noticia. "
+            "Sirve para debatir qué narrativas despiertan mayor empatía, temor o rechazo."
+        )
+    if st.button("➕ Agregar análisis generativo", key="btn_emociones"):
+        if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
+            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+        else:
+            data = analyze_emotions_json(df_all_cached, dominant_theme_cached, form0_context_cached)
+            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
+
+
+    st.markdown("### Analizar impactos por género")
+    with st.expander("¿Qué revisa este bloque?"):
+        st.markdown(
+            "Compara percepciones y emociones diferenciadas por género para identificar brechas o sensibilidades específicas. "
+            "Útil para ajustar la conversación y asegurar voces diversas en el taller."
+        )
+    if st.button("➕ Agregar análisis generativo", key="btn_genero"):
+        if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
+            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+        else:
+            data = analyze_gender_impacts_json(df_all_cached, dominant_theme_cached, form0_context_cached)
+            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
+
+
+    st.markdown("### Análisis general del taller")
+    with st.expander("¿Qué integra este resumen?"):
+        st.markdown(
+            "Genera una síntesis transversal con los hallazgos principales del taller: emociones dominantes, confianza, "
+            "elementos clave y posibles sesgos a profundizar en la discusión final."
+        )
+    if st.button("➕ Agregar análisis generativo", key="btn_general"):
+        if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
+            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+        else:
+            data = analyze_general_json(df_all_cached, dominant_theme_cached, form0_context_cached)
+            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
 
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------

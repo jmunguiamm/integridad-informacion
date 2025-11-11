@@ -170,7 +170,7 @@ def analyze_final_report(
 
     news_block_txt = "\n\n".join(news_summaries) if news_summaries else "(no hay noticias generadas)"
 
-    # 3) Construir prompt EXACTO según tus instrucciones
+    # 3) Construir prompt 
     prompt = f"""
 Contexto:
 Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento,
@@ -208,10 +208,8 @@ Formato de salida:
 Devuelve **Markdown estructurado**, con secciones claras. Dentro de cada sección, menciona explícitamente los aprendizajes por taller (usa subtítulos o párrafos separados para cada taller cuando corresponda):
 ## Variación por encuadre
 - Texto analítico sintético (2–4 párrafos).
-- Sugerencia de gráfico y por qué (por ejemplo: boxplot/violín para confianza por encuadre; barras apiladas para elementos).
 ## Diferencias por género
 - Texto analítico sintético (2–3 párrafos).
-- Sugerencia de gráfico y por qué (por ejemplo: heatmap de intensidad emocional por género).
 ## Patrones y sesgos emergentes
 - Texto analítico (2–4 párrafos), señalando relaciones y sesgos potenciales derivados de las respuestas.
 
@@ -241,3 +239,196 @@ Reglas:
             ],
         )
     return resp.choices[0].message.content.strip()
+
+
+import json
+import re
+import streamlit as st
+from .ai_analysis import get_openai_client
+
+
+def analyze_emotions_json(df_all, dominant_theme: str, form0_context_text: str):
+    """Analiza variaciones emocionales por encuadre dentro de cada taller."""
+    client = get_openai_client()
+    sample = df_all.head(200).to_dict(orient="records")
+    sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
+
+    prompt = f"""
+Eres un analista en ciencia de datos que trabaja con talleres sobre integridad de la información.
+
+Contexto:
+Se han generado tres noticias distintas sobre un mismo evento, cada una con un encuadre narrativo distinto.
+Los participantes respondieron un formulario indicando las emociones, nivel de confianza y elementos que llamaron su atención.
+
+Tema dominante: "{dominant_theme}"
+Contexto Form 0: "{(form0_context_text or '').strip()}"
+
+Datos de entrada:
+{sample_txt}
+
+---
+
+🎯 Objetivo:
+Identificar cómo las **emociones** varían según el encuadre narrativo dentro de cada taller.
+
+🧩 Tareas:
+1️⃣ Agrupa respuestas por “Taller” y por “Encuadre”.
+2️⃣ Analiza variaciones de emociones y confianza percibida.
+3️⃣ Resume hallazgos principales (no inventes información ausente).
+4️⃣ Genera **dos preguntas de debate** para el grupo.
+
+---
+
+📄 Formato JSON:
+{{
+  "workshops": [
+    {{
+      "taller": "<nombre o código>",
+      "emociones_por_encuadre": {{
+        "Desconfianza y responsabilización de actores": ["emocion1", "emocion2"],
+        "Polarización social y exclusión": ["emocion1", "emocion2"],
+        "Miedo y control": ["emocion1", "emocion2"]
+      }},
+      "resumen": "<síntesis breve del patrón emocional (2–3 frases)>",
+      "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
+    }}
+  ]
+}}
+---
+
+🧠 Reglas:
+- Usa únicamente la información visible en los datos.
+- Tono analítico, educativo y sintético.
+- No generalices ni inventes información fuera del dataset.
+- Si hay poca información, indica “Datos insuficientes”.
+"""
+
+    with st.spinner("Analizando emociones por encuadre..."):
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.3,
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+    text = resp.choices[0].message.content.strip()
+    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    return data
+
+
+def analyze_gender_impacts_json(df_all, dominant_theme: str, form0_context_text: str):
+    """Analiza impactos diferenciados por género y encuadre."""
+    client = get_openai_client()
+    sample = df_all.head(200).to_dict(orient="records")
+    sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
+
+    prompt = f"""
+Eres un analista en ciencia de datos que explora impactos interseccionales en talleres de integridad de la información.
+
+Tema dominante: "{dominant_theme}"
+Contexto Form 0: "{(form0_context_text or '').strip()}"
+
+Datos combinados:
+{sample_txt}
+
+---
+
+🎯 Objetivo:
+Identificar diferencias de reacción emocional, confianza y percepción según género y tipo de encuadre.
+
+🧩 Tareas:
+1️⃣ Analiza respuestas por género y encuadre.
+2️⃣ Resume patrones o contrastes significativos.
+3️⃣ Describe correlaciones entre género, confianza y emociones.
+4️⃣ Si los datos son limitados, indícalo.
+5️⃣ Genera dos preguntas de debate (máx. 20 palabras cada una).
+
+📄 Formato JSON:
+{{
+  "analisis_genero": [
+    {{
+      "taller": "<código>",
+      "patrones_por_genero": {{
+        "Femenino": "<síntesis de emociones y confianza>",
+        "Masculino": "<síntesis de emociones y confianza>",
+        "Otro/No binario": "<síntesis si aplica>"
+      }},
+      "hallazgos_transversales": "<resumen general de diferencias detectadas>",
+      "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
+    }}
+  ]
+}}
+---
+
+🧠 Reglas:
+- Mantén tono analítico y educativo.
+- No generalices ni uses lenguaje discriminatorio.
+- Usa solo información presente.
+"""
+
+    with st.spinner("Analizando impactos diferenciados por género..."):
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.35,
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+    text = resp.choices[0].message.content.strip()
+    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    return data
+
+
+def analyze_general_json(df_all, dominant_theme: str, form0_context_text: str):
+    """Análisis general interseccional de emociones, confianza y sesgos cognitivos."""
+    client = get_openai_client()
+    sample = df_all.head(200).to_dict(orient="records")
+    sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
+
+    prompt = f"""
+Eres un analista de datos cualitativos en comunicación y percepción pública.
+
+Tema dominante: "{dominant_theme}"
+Contexto Form 0: "{(form0_context_text or '').strip()}"
+
+Datos combinados:
+{sample_txt}
+
+---
+
+🎯 Objetivo:
+Detectar patrones transversales entre emociones, confianza, encuadres y sesgos cognitivos percibidos.
+
+🧩 Tareas:
+1️⃣ Analiza variaciones entre encuadres narrativos.
+2️⃣ Identifica posibles sesgos cognitivos (confirmación, atribución, negatividad, etc.).
+3️⃣ Resume hallazgos principales en dos párrafos breves.
+4️⃣ Si los datos son limitados, indícalo explícitamente.
+
+📄 Formato JSON:
+{{
+  "resumen_general": {{
+    "patrones_transversales": "<síntesis en 3–5 oraciones>",
+    "sesgos_identificados": ["<sesgo1>", "<sesgo2>"],
+    "hallazgos_clave": "<resumen de 4 líneas>"
+  }}
+}}
+---
+
+🧠 Reglas:
+- Tono analítico, educativo y sintético.
+- No inventes información ni generalices.
+- Destaca solo correlaciones que puedan inferirse del dataset.
+"""
+
+    with st.spinner("Generando análisis general del taller..."):
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.35,
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+    text = resp.choices[0].message.content.strip()
+    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    return data
