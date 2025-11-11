@@ -211,7 +211,7 @@ def select_image_for_story(
             candidate_path = raw_name
             if not os.path.isabs(candidate_path):
                 cleaned = candidate_path.lstrip("/\\")
-                prefix = f"{folder.rstrip('/\\')}{os.sep}"
+                prefix = folder.rstrip("/\\") + os.sep
                 if not cleaned.startswith(prefix):
                     candidate_path = os.path.join(folder, cleaned)
                 else:

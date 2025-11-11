@@ -1,10 +1,18 @@
 """News generation service with different narrative frames."""
+import os
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 
 from .ai_analysis import get_openai_client
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
 from components.image_repo import select_image_for_story
 
 
