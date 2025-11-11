@@ -5,6 +5,7 @@ import re
 import time
 import os
 import difflib
+from datetime import datetime
 import pandas as pd
 import streamlit as st
 
@@ -57,6 +58,24 @@ _openai_client = get_openai_client
 _analyze_reactions = analyze_reactions
 _analyze_final_report = analyze_final_report
 
+
+def _log_debug_message(message: str, *, level: str = "info", context: str | None = None, data: dict | None = None):
+    """Registra mensajes de depuración para mostrarlos en la sección de Configuraciones."""
+    if not message:
+        return
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": message,
+        "level": level,
+        "context": context,
+    }
+    if data is not None:
+        entry["data"] = data
+    logs = st.session_state.setdefault("workflow_debug_messages", [])
+    logs.append(entry)
+    st.session_state["workflow_debug_messages"] = logs[-200:]
+
+
 # ---------- HELPER FUNCTIONS (kept here for page-specific logic) ----------
 def _parse_news_blocks(raw: str):
     """
@@ -70,7 +89,7 @@ def _parse_news_blocks(raw: str):
         return []
 
     # 1️⃣ Separar el texto en bloques (cada noticia generada)
-    parts = re.split(r'^\s*[-—]{3,}\s*$|\n{2,}', raw, flags=re.MULTILINE)
+    parts = re.split(r'\n?\s*[-—]{3,}\s*\n?', raw)
     cleaned = []
 
     for p in parts:
@@ -237,6 +256,58 @@ def render_setup_trainer_page():
     else:
         st.info("⚠️ Configura las credenciales para seleccionar un taller.")
         st.session_state.selected_workshop_date = None
+
+    st.markdown("---")
+    st.subheader("🛠️ Debug messages")
+    debug_active = st.checkbox(
+        "Activar y mostrar registros técnicos",
+        value=bool(st.session_state.get("debug_image_scoring")),
+        help="Incluye puntajes de imágenes y mensajes automáticos sobre la ejecución del taller.",
+    )
+    st.session_state["debug_image_scoring"] = debug_active
+
+    if debug_active:
+        col_hint, col_clear = st.columns([4, 1])
+        with col_hint:
+            st.caption("Revisa aquí los eventos internos. Los registros se conservan solo durante la sesión actual.")
+        with col_clear:
+            if st.button("Limpiar registros", key="clear_debug_logs"):
+                st.session_state["image_scoring_debug"] = []
+                st.session_state["workflow_debug_messages"] = []
+                st.caption("Registros limpiados.")
+
+        workflow_logs = st.session_state.get("workflow_debug_messages") or []
+        if workflow_logs:
+            st.markdown("**Mensajes del flujo del taller**")
+            for idx, entry in enumerate(reversed(workflow_logs), start=1):
+                title = f"[{entry.get('timestamp')}] {entry.get('context') or 'Sin contexto'} — {entry.get('level', 'info').upper()}"
+                with st.expander(title, expanded=False):
+                    st.markdown(entry.get("message", ""))
+                    data = entry.get("data")
+                    if data:
+                        st.json(data)
+        else:
+            st.caption("Sin mensajes registrados del flujo.")
+
+        image_entries = st.session_state.get("image_scoring_debug") or []
+        if image_entries:
+            st.markdown("**Selección de imágenes**")
+            for idx, entry in enumerate(reversed(image_entries), start=1):
+                title = f"Intento #{len(image_entries) - idx + 1} — {entry.get('encuadre') or 'Sin encuadre'}"
+                with st.expander(title, expanded=False):
+                    st.markdown(f"**Tema:** {entry.get('theme') or 'N/A'}")
+                    st.markdown(f"**Seleccionada:** `{entry.get('selected') or 'Sin coincidencia'}`")
+                    best = entry.get("best_score")
+                    st.markdown(f"**Puntaje máximo:** {best if best is not None else 'N/D'}")
+                    st.markdown(f"**Usó fallback:** {'Sí' if entry.get('used_fallback') else 'No'}")
+                    candidates = entry.get("candidates")
+                    if isinstance(candidates, list):
+                        st.markdown("**Candidatos evaluados:**")
+                        st.json(candidates)
+                    else:
+                        st.markdown(f"**Detalle:** {candidates}")
+        else:
+            st.caption("Sin registros de selección de imágenes.")
 
 
 def render_introduction_page():
@@ -424,10 +495,13 @@ def render_form1_page():
     if FORM1_URL:
         qr = _qr_image_for(FORM1_URL)
         if qr:
-            st.image(qr, caption="Escanea para abrir Cuestionario 1", width=220)
+            left, center, right = st.columns([1, 2, 1])
+            with center:
+                st.image(qr, caption="Escanea para abrir Cuestionario 1", width=360)
         st.link_button("📝 Abrir Cuestionario 1", FORM1_URL, use_container_width=True)
 
-    _autorefresh_toggle("form1_autorefresh")
+        if st.button("🔄 Actualizar respuestas", use_container_width=True):
+            st.rerun()
 
     if not (FORMS_SHEET_ID and FORM1_TAB and SA):
         st.info("Configura credenciales para ver conteo.")
@@ -442,7 +516,7 @@ def render_form1_page():
             df = _filter_df_by_date(df, workshop_date)
             st.info(f"📅 Mostrando respuestas del taller del {workshop_date}")
         else:
-            st.warning("⚠️ No hay taller seleccionado. Ve a 'Cuestionario para formador' para seleccionar una fecha.")
+            st.warning("⚠️ No hay taller seleccionado. Ve a 'Configuraciones' para seleccionar una fecha.")
         
         st.metric("Respuestas del taller", len(df))
         if not df.empty:
@@ -471,7 +545,7 @@ def render_analysis_trends_page():
         workshop_date = st.session_state.get("selected_workshop_date")
         
         if not workshop_date:
-            st.warning("⚠️ No hay taller seleccionado. Ve a 'Cuestionario para formador' para seleccionar una fecha.")
+            st.warning("⚠️ No hay taller seleccionado. Ve a 'Configuraciones' para seleccionar una fecha.")
             return
         
         df  = _sheet_to_df(FORMS_SHEET_ID, FORM1_TAB)
@@ -658,6 +732,99 @@ def render_analysis_trends_page():
     st.markdown("---")
     st.caption("Usa las flechas de la barra lateral para continuar con el siguiente paso del taller.")
 
+
+def render_neutral_news_page():
+    """Genera una noticia neutral basada en el tema dominante y el contexto del Form 0."""
+    st.header("📰 Noticia neutral del taller")
+
+    OPENAI = _read_secrets("OPENAI_API_KEY", "")
+    if not OPENAI:
+        st.error("Configura la clave OPENAI_API_KEY en secrets para generar la noticia.")
+        return
+
+    dominant_theme = st.session_state.get("dominant_theme")
+    if not dominant_theme:
+        st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
+        st.caption("Usa la flecha izquierda en la barra lateral para regresar y obtener el tema.")
+        return
+
+    workshop_date = st.session_state.get("selected_workshop_date")
+    form0_context = st.session_state.get("form0_context_text", "")
+
+    st.markdown(f"**Tema dominante actual:** `{dominant_theme}`")
+    if workshop_date:
+        st.caption(f"Contextualizas esta noticia para el taller del {workshop_date}.")
+
+    
+    neutral_news = st.session_state.get("neutral_news_text")
+    if neutral_news:
+        st.subheader("📄 Última noticia generada")
+        st.markdown(neutral_news)
+
+    st.markdown("---")
+
+    if st.button("✍️ Mostrar noticia neutral", type="primary", use_container_width=True):
+        prompt = f"""
+    Contexto general:
+En un ejercicio previo, se identificaron los tópicos dominantes {dominant_theme} y las emociones asociadas que generan percepciones de inseguridad según las respuestas del [formulario 1]. Con base en esos hallazgos, se elaboró una nube de palabras que refleja los temas y emociones predominantes.
+
+Rol:
+Eres reportero de un medio independiente mexicano (por ejemplo, Animal Político, Aristegui Noticias, Proceso o Nexos). Debes redactar una **noticia breve, objetiva y verificable**, como si fuera una nota de crónica informativa publicada hoy.
+
+Instrucción:
+Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado con el tema dominante {dominant_theme}.
+El texto debe:
+
+- Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
+- Mantener una **estructura noticiosa clásica**:
+  - **Título factual y conciso.**
+  - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
+  - **Segundo párrafo:** detalles del hecho (acciones de autoridades, testigos, contexto inmediato).
+  - **Tercer párrafo:** contexto breve (por qué es relevante o cómo se relaciona con el tema dominante).
+- Evitar cualquier tono analítico, especulativo o explicativo.
+- No usar expresiones como “según expertos”, “se ha observado”, o “el fenómeno refleja”.
+- Permitir solo menciones genéricas a fuentes (“de acuerdo con reportes oficiales”, “autoridades locales informaron”).
+- Utilizar oraciones cortas, lenguaje informativo y directo.
+
+Estilo:
+- Periodismo mexicano independiente, tono sobrio y neutral.
+- Sin adjetivos, juicios, análisis ni interpretaciones.
+- Prioriza la precisión y la claridad.
+- Longitud aproximada: **100 a 150 palabras**.
+
+Formato de salida esperado:
+[Título de la noticia]
+[Cuerpo de 1 a 2 párrafos breves, estilo nota informativa]
+"""
+        try:
+            client = _openai_client()
+            with st.spinner("🧠 Mostrando noticia neutral con IA…"):
+                    resp = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                    temperature=0.35,
+                    max_tokens=700,
+                        messages=[
+                        {
+                            "role": "system",
+                            "content": "Eres un periodista profesional. Escribes notas informativas con precisión y neutralidad." \
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                )
+            news_text = resp.choices[0].message.content.strip()
+            st.session_state["neutral_news_text"] = news_text
+            _log_debug_message(
+                "Noticia neutral generada correctamente.",
+                level="success",
+                context="Noticia neutral",
+            )
+            st.markdown(news_text)
+        except Exception as e:
+            st.error(f"No pude generar la noticia neutral automáticamente: {e}")
+
+    st.caption("Puedes volver a generar la noticia si necesitas otra versión. Usa las flechas de la barra lateral para continuar.")
+
+
 def render_form2_page():
     """Cuestionario 2 — QR y guía para continuar con noticias."""
     st.header("📲 Cuestionario 2 — reacciones ante noticias")
@@ -666,7 +833,15 @@ def render_form2_page():
     if FORM2_URL:
         qr = _qr_image_for(FORM2_URL)
         if qr:
-            st.image(qr, caption="Escanea para abrir Cuestionario 2", width=220)
+            st.markdown("""
+            <div style="display:flex; justify-content:center;">
+                <div>
+            """, unsafe_allow_html=True)
+            st.image(qr, caption="Escanea para abrir Cuestionario 2", width=360)
+            st.markdown("""
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         st.link_button("📝 Abrir Cuestionario 2", FORM2_URL, use_container_width=True)
     else:
         st.warning("Configura FORM2_URL en secrets para mostrar el QR y el enlace.")
@@ -714,7 +889,7 @@ def _parse_news_blocks(raw: str):
     if not isinstance(raw, str) or not raw.strip():
         return []
 
-    parts = re.split(r'^\s*[-—]{3,}\s*$|\n{2,}', raw, flags=re.MULTILINE)
+    parts = re.split(r'\n?\s*[-—]{3,}\s*\n?', raw)
     cleaned = []
 
     for p in parts:
@@ -770,21 +945,37 @@ def render_news_flow_page():
     dominant_theme = st.session_state.get("dominant_theme")
     generate_disabled = dominant_theme is None
 
+    neutral_story = st.session_state.get("neutral_news_text")
+    if not neutral_story:
+        st.warning("Genera primero la noticia neutral para poder crear las versiones con encuadres.")
+        st.caption("Ve a ‘Noticia neutral del taller’, genere la nota base y vuelve aquí.")
+        generate_disabled = True
+
     if st.button("🔎 Mostrar noticias sobre este tema", type="primary", use_container_width=True, disabled=generate_disabled):
         if generate_disabled:
-            st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
+            st.warning("Primero completa los pasos anteriores (tema dominante y noticia neutral).")
         else:
             try:
-                with st.spinner("Generando noticias simuladas…"):
-                    raw_news = generate_news(dominant_theme)
-                if raw_news:
-                    st.session_state.generated_news_raw = raw_news
-                    st.session_state.news_index = 0
-                    st.success("✅ Noticias generadas. Usa las flechas de la barra lateral para recorrerlas.")
-                else:
-                    st.warning("No se recibió contenido para las noticias.")
+                with st.spinner("Mostrando noticias con los tres encuadres…"):
+                    generated = generate_news(dominant_theme, neutral_story)
+                    for i, block in enumerate(generated):
+                        if not block.get("image"):
+                            fallback = f"images/taller{i+1}.jpeg"
+                            if os.path.isfile(fallback):
+                                block["image"] = fallback
+                st.session_state["generated_news_blocks"] = generated
+                joined = "\n\n---\n\n".join([f"Encuadre {i+1}:\n{block['text']}" for i, block in enumerate(generated)])
+                st.session_state["generated_news_raw"] = joined
+                st.session_state.news_index = 0
+                _log_debug_message(
+                    "Noticias con encuadres generadas.",
+                    level="success",
+                    context="Noticias del taller",
+                    data={"encuadres": [block.get("encuadre") for block in generated]},
+                )
+                st.caption("Noticias listas. Usa las flechas de la barra lateral para recorrerlas.")
             except Exception as e:
-                st.error(f"Error generando noticias: {e}")
+                st.error(f"Error generando noticias con encuadres: {e}")
 
     st.markdown("---")
 
@@ -794,30 +985,19 @@ def render_news_flow_page():
 
     st.info(f"Tema dominante actual: **{dominant_theme}**")
 
-    from components.image_repo import get_images_for_dominant_theme
-    theme_images = get_images_for_dominant_theme(dominant_theme or "")
-
-    if theme_images:
-        with st.expander("🖼️ Ver imágenes detectadas para este tema"):
-            st.markdown("Estas son las imágenes asociadas al tema dominante en `/images/`:")
-            cols = st.columns(min(len(theme_images), 3))
-            for i, img in enumerate(theme_images):
-                with cols[i % len(cols)]:
-                    st.image(img, caption=os.path.basename(img), use_container_width=True)
-    else:
-        st.warning("⚠️ No se encontraron imágenes asociadas a este tema dominante en `/images/`.")
-    
     st.markdown("---")
 
-    raw = st.session_state.get("generated_news_raw")
-    if not raw:
-        st.info("Haz clic en el botón superior para generar las noticias basadas en el tema dominante.")
+    stories = st.session_state.get("generated_news_blocks")
+    if not stories:
+        raw = st.session_state.get("generated_news_raw")
+        if raw:
+            stories = _parse_news_blocks(raw)
+        else:
+            st.info("Haz clic en el botón superior para generar las noticias basadas en el tema dominante.")
         return
 
-    stories = _parse_news_blocks(raw)
     if not stories:
         st.warning("No se pudieron interpretar noticias desde el texto generado.")
-        st.code(raw)
         return
 
     idx = int(st.session_state.get("news_index", 0))
@@ -825,45 +1005,39 @@ def render_news_flow_page():
         idx = 0
         st.session_state.news_index = 0
 
-    encuadres = [
-        "Desconfianza y responsabilización de actores",
-        "Polarización social y exclusión",
-        "Miedo y control",
-    ]
+    encuadres = [story.get("encuadre") or f"Encuadre {i+1}" for i, story in enumerate(stories)]
     if idx < len(encuadres):
-        st.markdown(f"### 🗞️ Encuadre {idx + 1}: {encuadres[idx]}")
+        st.caption(f"Encuadre: {encuadres[idx]}")
 
     story = stories[idx]
+    story_dict = story if isinstance(story, dict) else {"text": story.get("text") if hasattr(story, "get") else story, "image": story.get("image") if hasattr(story, "get") else None, "encuadre": story.get("encuadre") if hasattr(story, "get") else None}
 
     _typing_then_bubble(
-        message_text=story.get("text", ""),
-        image_path=story.get("image"),
-        encuadre=story.get("encuadre")
+        message_text=story_dict.get("text", ""),
+        image_path=story_dict.get("image"),
+        encuadre=None,
     )
 
-    used_image = story.get("image")
-    if used_image:
-        st.caption(f"🖼️ Imagen utilizada: `{os.path.basename(used_image)}`")
-    else:
-        st.caption("⚠️ No se asignó imagen específica (usando fallback o nula).")
+def render_news_comparison_page():
+    """Visualiza las tres versiones de la noticia para comparar encuadres."""
+    st.header("🔍 Comparativa de encuadres")
+    
 
-    st.caption("Usa las flechas de la barra lateral para ver la noticia anterior o la siguiente.")
+    news_blocks = st.session_state.get("generated_news_blocks")
+    if not news_blocks:
+        st.warning("Aún no se han generado las noticias con encuadres. Ve a ‘Noticias del taller’ y créalas primero.")
+        return
 
-    if idx == len(stories) - 1:
-        st.markdown("---")
-        st.subheader("📊 Participación del grupo (respuestas finales)")
-        FORMS_SHEET_ID = _forms_sheet_id()
-        FORM2_TAB = _read_secrets("FORM2_TAB", "")
-        if FORMS_SHEET_ID and FORM2_TAB:
-            try:
-                df2 = _sheet_to_df(FORMS_SHEET_ID, FORM2_TAB)
-                workshop_date = st.session_state.get("selected_workshop_date")
-                if workshop_date:
-                    df2 = _filter_df_by_date(df2, workshop_date)
-                    st.info(f"📅 Respuestas del taller del {workshop_date}")
-                st.metric("Respuestas finales del taller", len(df2))
-            except Exception as e:
-                st.error(f"Error al contar respuestas finales: {e}")
+    st.caption("1. Observa cómo cambia la narrativa del mismo hecho según el encuadre.")
+    st.caption("2. Utiliza esta comparativa para discutir tono, sesgos y emociones que provoca cada versión.")
+
+    for block in news_blocks:
+        _typing_then_bubble(
+            message_text=block.get("text", "(sin contenido)"),
+            image_path=block.get("image"),
+            encuadre=None,
+        )
+    st.markdown("---")
 
 def render_explanation_page():
     """📘 Página intermedia entre Noticias y Análisis final."""
@@ -873,10 +1047,10 @@ def render_explanation_page():
     En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final.
     """)
 
-    st.subheader("📰 Hilo Conductor")
+    st.subheader("Hilo Conductor")
     st.text_area("Lo que acabamos de ver", "Por ejemplo, los mensajes que vimos corresponden a un mismo evento pero con encuadres narrativos distintos.", height=150)
 
-    st.subheader("🧩 Descripción de que es un encuadre")
+    st.subheader("Descripción de que es un encuadre")
     st.text_area("descripcion_encuadres", "Un encuadre narrativo es la técnica de enmarcar o delimitar la porción de realidad que se va a presentar en una historia, ya sea escrita o visual, influyendo en cómo el espectador o lector interpreta los eventos y emociones" , height=150)
 
     st.subheader("Encuadres de la noticia")
@@ -925,7 +1099,13 @@ def render_workshop_insights_page():
                     clear_existing=True
                 )
 
-            st.success("✅ Datos guardados en 'Datos Centralizados Form2'. ¡Listos para Looker!")
+            _log_debug_message(
+                "Datos centralizados actualizados en Google Sheets.",
+                level="success",
+                context="Preparación de análisis final",
+                data={"filas": int(len(df_normalized))},
+            )
+            st.caption("Datos centralizados actualizados. Revisa el dashboard para validar la carga.")
         except Exception as e:
             st.error(f"❌ Error procesando datos: {e}")
             import traceback
@@ -1091,8 +1271,10 @@ ROUTES = {
     "Introducción al taller": render_introduction_page,           
     "Cuestionario 1": render_form1_page,                          
     "Análisis y tema dominante": render_analysis_trends_page,   
+    "Noticia neutral del taller": render_neutral_news_page,
     "Cuestionario 2": render_form2_page,                          
     "Noticias del taller": render_news_flow_page,
+    "Comparativa de encuadres": render_news_comparison_page,
     "Explicacion del taller": render_explanation_page,                
     "Análisis final del taller": render_workshop_insights_page,   
 }
@@ -1285,20 +1467,18 @@ def main():
                 if st.button("⬅️", use_container_width=True, disabled=prev_disabled, key="sidebar_prev"):
                     if has_prev_news:
                         st.session_state.news_index = news_index - 1
-                        st.rerun()
                     elif nav_ctx["previous"]:
                         st.session_state.current_page = nav_ctx["previous"]
-                        st.rerun()
+                    st.rerun()
                 st.markdown('<div class="sidebar-arrow-caption">Anterior</div>', unsafe_allow_html=True)
 
             with nav_cols[1]:
                 if st.button("➡️", use_container_width=True, disabled=next_disabled, key="sidebar_next"):
                     if has_next_news:
                         st.session_state.news_index = news_index + 1
-                        st.rerun()
                     elif nav_ctx["next"]:
                         st.session_state.current_page = nav_ctx["next"]
-                        st.rerun()
+                    st.rerun()
                 st.markdown('<div class="sidebar-arrow-caption">Siguiente</div>', unsafe_allow_html=True)
         else:
             st.warning("Página actual fuera del flujo del taller.")

@@ -1,36 +1,46 @@
 """News generation service with different narrative frames."""
+import re
+from datetime import datetime
+
 import streamlit as st
+
 from .ai_analysis import get_openai_client
+from components.image_repo import select_image_for_story
 
 
-def generate_news(dominant_theme: str):
+def generate_news(dominant_theme: str, neutral_story: str | None = None):
     """
-    Genera tres noticias con diferentes encuadres narrativos basadas en el tema dominante.
-    
+    Genera tres versiones de la noticia neutral aplicando diferentes encuadres narrativos.
+
+    Args:
+        dominant_theme: Tema principal identificado en el taller.
+        neutral_story: Noticia neutral base en formato Markdown/texto.
+
     Returns:
-        str: Texto concatenado con las tres noticias generadas
+        list[dict]: [{"encuadre": str, "text": str}, ...]
     """
     client = get_openai_client()
-    
+
+    base_story = (neutral_story or "(Sin noticia neutral generada; describe de forma objetiva el tema dominante)").strip()
+
     prompts = [
-        # Prompt 1 — Desconfianza y responsabilización de actores
-        f"""
-Contexto general:
-Previamente se realizó un ejercicio en donde se identificaron los tópicos dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
-Rol: 
-Tienes un rol simulado de ser una persona que busca socavar la confianza en las instituciones públicas, los procesos democráticos y la información objetiva.
+        (
+            "Desconfianza y responsabilización de actores",
+            f"""
+Contexto:
+Esta es la noticia neutral que debes reinterpretar:
+---
+{base_story}
+---
+
+Rol:
+Redacta esta misma noticia como una persona que busca sembrar desconfianza y responsabilizar a actores específicos.
 
 Instrucciones:
-- Redacta un mensaje simulando una noticia compartida en WhatsApp.
-- Utiliza el tema dominante identificado en el formulario 1 ({dominant_theme}) referente a los eventos que más han generado sensación de inseguridad y las emociones asociadas.
-- Debe tener entre 180 y 220 palabras (mínimo 180).
-- Aplica el encuadre narrativo de desconfianza y responsabilización de actores.
-
-Descripción del encuadre de desconfianza y responsabilización de actores:
-Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano.
-Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. 
-
-Elementos del encuadre:
+- Mantén los hechos principales sin inventar datos nuevos.
+- Reescribe la narrativa enfatizando la desconfianza institucional y señalando culpables explícitos.
+- Maximo 220 palabras. Evita listas.
+- Usa estos elementos del encuadre:
 Atribuye la responsabilidad a ciertos actores, culpando y/o exigiendo.
 Usa un lenguaje causal ("por", "debido a", "por culpa de").
 Orienta desconfianza institucional.
@@ -42,81 +52,106 @@ Suele deslegitimar fuentes oficiales o periodísticas, justificando que estas es
 Suele tener presencia de emojis con expresión escéptica o de advertencia (🤔 😒 ⚠️ 👀).
 Usa signos como "¿?", "…" y "—" para enfatizar la sospecha o ironía.
 Incorporar mayúsculas parciales o exclamaciones para representar tono de hartazgo y desconfianza.
-
-Limitaciones:
-No generes nada que pueda vulnerar o promover discriminación.
-Evita reproducir estigmas, lenguaje violento o discriminatorio.
-Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz.
 """,
-        # Prompt 2 — Polarización social y exclusión
-        f"""
-Previamente se realizó un ejercicio en donde se identificaron los tópicos dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
-Rol: 
-Tienes un rol simulado de ser una persona que busca reproducir estigmas y fomenta la deshumanización de un grupo en específico, buscan mantener el status quo y desestimar cualquier intento del otro grupo a través de la polarización. 
+        ),
+        (
+            "Polarización social y exclusión",
+            f"""
+Contexto:
+Esta es la noticia neutral que debes reinterpretar:
+---
+{base_story}
+---
+
+Rol:
+Redacta esta noticia con un encuadre que polariza a dos grupos sociales, fomentando la exclusión del "otro".
 
 Instrucciones:
-Usa el tema dominante identificado en el formulario 1 ({dominant_theme}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de polarización social y exclusión
-
-Descripción del encuadre de polarización social y exclusión:
-Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de "enemigos". Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia. 
-
-Elementos clave del mensaje whatsapp:
-Lenguaje emocional o alarmista.
-Contraposición de grupos (ellos/nosotros).
-Reforzamiento de prejuicios o resentimientos.
-Búsqueda de validación emocional.
-Culpabilización generalizada ("los jóvenes", "los migrantes", etc.).
-Emojis de conflicto o ira (😡 😤 🔥 ⚔️ 💣 🚫).
-Mayúsculas parciales y exclamaciones para enfatizar antagonismo.
-
-Limitaciones:
-No generes nada que pueda vulnerar o promover discriminación.
-Evita reproducir estigmas, lenguaje violento o discriminatorio.
-Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz.
+- Conserva los hechos clave sin inventar nueva información.
+- Usa lenguaje que contraste claramente “nosotros vs. ellos”, apelando a emociones intensas.
+- Maximo 220 palabras. Evita listas.
+- Usa estos elementos del encuadre:
+Usa un lenguaje emocional y alarmista.
+Acentúa la contraposición de grupos usando palabras como “ellos” vs ”nosotros”.
+Refuerza prejuicios y resentimientos.
+Busca una validación emocional más que racional.
+Hace uso de la culpabilización generalizada (“los migrantes”, “los jóvenes”, “las mujeres”).
+Hay una ausencia de pluralidad de voces, sólo se cuenta un lado de la historia.
+Usa un lenguaje discriminatorio o juicios sin pruebas.
+Contiene asociaciones repetitivas entre grupo y problema.
+Usa signos de exclamación, mayúsculas parciales, puntos suspensivos (…) y emojis de conflicto (😡 😤 🔥 ⚔️ 💣 🚫) para evidenciar la carga emocional y el antagonismo.
 """,
-        # Prompt 3 — Miedo y control
-        f"""
-Contexto general:
-Previamente se realizó un ejercicio en donde se identificaron los tópicos dominantes y emociones asociadas que causan inseguridad según las respuestas del [formulario 1] y se generó una nube de palabras con los tópicos y la emociones dominantes.
+        ),
+        (
+            "Miedo y control",
+            f"""
+Contexto:
+Esta es la noticia neutral que debes reinterpretar:
+---
+{base_story}
+---
 
-Rol: 
-Tienes un rol simulado de ser una persona que usa el miedo como herramienta de persuasión y parálisis.
+Rol:
+Reescribe la noticia utilizando un encuadre que enfatice el miedo y la necesidad de control/medidas extremas.
 
 Instrucciones:
-Usa el tema dominante identificado en el formulario 1 ({dominant_theme}) referentes a los eventos que más han generado sensación de inseguridad y las emociones asociadas y generar una noticia compartida en WhatsApp (máximo 200 palabras), aplicando el encuadre narrativo de miedo y control  
-
-Descripción de encuadre de miedo y control:
-Exagera el peligro o amenaza para justificar medidas extremas, autoritarias o de control. 
-
-Elementos clave del encuadre:
-- Lenguaje apocalíptico o totalizador ("todos", "nunca").
-- Ausencia de datos verificables.
-- Justificación del control o vigilancia.
-- Signos de urgencia: "‼️", "❗❗❗", "…", "!!!".
-- Emojis de alarma: 😱 😨 💀 🚨 💣 🔒 📹 🔔.
-- Mayúsculas parciales para enfatizar tono de alarma.
-
-Limitaciones:
-No generes nada que pueda vulnerar o promover discriminación.
-Evita reproducir estigmas, lenguaje violento o discriminatorio.
-Limítate a que el mensaje se enmarque en el tono descrito en el encuadre, no cierres con un mensaje optimista o feliz.
-"""
+- Mantén los hechos originales, pero magnifica las consecuencias negativas y la sensación de amenaza.
+- Sugiere medidas de control o vigilancia como respuesta.
+- Maximos 220 palabras. Evita listas.
+- Usa estos elementos del encuadre:
+usa un lenguaje apocalíptico de urgencia y totalizador.
+Imágenes impactantes o repetición de violencia.
+Ausencia de datos verificables.
+Justificación del control o vigilancia.
+Uso exagerado de signos de puntuación para remarcar desesperación o urgencia. (‼️, ❗❗❗, …, ???, !!! →)
+Emojis que usa: 😱 😨 😰 💀 🔥 ⚠️ 🚨 💣 👁️‍🗨️ 🔒 📹 🔔 🧟
+Usa mayúsculas parciales para enfatizar un tono de alarma.
+Limita la libertad través de sugerencias y recomendaciones usando el peligro como justificación 
+Usa la repetición de palabras o frases: “Ya es tarde… demasiado tarde… 😨”
+""",
+        ),
     ]
 
     generated_blocks = []
-    for idx, ptext in enumerate(prompts, start=1):
-        with st.spinner(f"🧩 Generando Noticia {idx}…"):
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                temperature=0.55,
-                messages=[
-                    {"role": "system", "content": "Asistente educativo experto en comunicación social y desinformación."},
-                    {"role": "user", "content": ptext},
-                ],
-            )
-            result = resp.choices[0].message.content.strip()
-            generated_blocks.append(f"Encuadre {idx}:\n{result}")
-            st.success(f"✅ Noticia {idx} lista.")
+    used_images: set[str] = set()
+    for idx, (encuadre, prompt_text) in enumerate(prompts, start=1):
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.55,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Eres un experto en narrativa persuasiva. Adaptas historias manteniendo los hechos, cambiando sólo el enfoque emocional."
+                },
+                {"role": "user", "content": prompt_text},
+            ],
+        )
+        result = resp.choices[0].message.content.strip()
+        # Limpieza básica para eliminar encabezados tipo "1." o prefijos escapados
+        result = re.sub(r"^(?:\s|\\|/|[\d.\-)])+","", result)
+        debug_flag = bool(st.session_state.get("debug_image_scoring"))
+        image_path = select_image_for_story(
+            dominant_theme,
+            result,
+            encuadre,
+            exclude_paths=used_images,
+            debug=debug_flag,
+        )
+        if image_path:
+            used_images.add(image_path)
 
-    return "\n\n---\n\n".join(generated_blocks)
+        generated_blocks.append({"encuadre": encuadre, "text": result, "image": image_path})
+
+    log_payload = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": "Noticias con encuadres generadas.",
+        "level": "success",
+        "context": "Noticias del taller",
+        "data": {"encuadres": [block.get("encuadre") for block in generated_blocks]},
+    }
+    existing = st.session_state.setdefault("workflow_debug_messages", [])
+    existing.append(log_payload)
+    st.session_state["workflow_debug_messages"] = existing[-200:]
+
+    return generated_blocks
 

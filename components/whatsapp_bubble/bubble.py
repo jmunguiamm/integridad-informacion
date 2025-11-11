@@ -71,6 +71,8 @@ def typing_then_bubble(
         message_text = message_text.replace(embedded_html, "")
 
     safe_msg = html.escape(message_text, quote=False).replace("\n", "<br>")
+    # Reconvert bold markers **text** to HTML strong
+    safe_msg = re.sub(r"\*\*(.+?)\*\*", r"<strong>\\1</strong>", safe_msg)
 
     # Cajita del encuadre (si aplica)
     if encuadre:
@@ -91,20 +93,7 @@ def typing_then_bubble(
             """,
             unsafe_allow_html=True
         )
-    
-    enfoque_html = ""
-    if encuadre:
-        enfoque_html = f"""
-        <div style="
-        font-size:16px;
-        font-weight:600;
-        color:#0a0a0a;
-        margin-bottom:6px;
-        ">
-        {html.escape(encuadre)}
-        </div>
-        """
-    
+ 
     # Imagen tipo 'card' dentro del mensaje
     img_html = ""
     if image_path and os.path.isfile(image_path):
@@ -141,7 +130,6 @@ def typing_then_bubble(
         animation: fadeIn 0.4s ease-out;
     ">
         <div style="color:#777;font-size:12px;margin-bottom:4px;">↪︎↪︎ Reenviado muchas veces</div>
-        {enfoque_html}
         {safe_msg}
         {embedded_html}
         {img_html}
