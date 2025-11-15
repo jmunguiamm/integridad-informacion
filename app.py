@@ -22,7 +22,6 @@ from services.ai_analysis import (
     get_openai_client,
     analyze_reactions,
     analyze_trends,
-    analyze_final_report,
     analyze_emotions_json,
     analyze_gender_impacts_json,
     analyze_general_json
@@ -60,7 +59,6 @@ _qr_image_for = qr_image_for
 _autorefresh_toggle = autorefresh_toggle
 _openai_client = get_openai_client
 _analyze_reactions = analyze_reactions
-_analyze_final_report = analyze_final_report
 
 
 def _log_debug_message(message: str, *, level: str = "info", context: str | None = None, data: dict | None = None):
@@ -78,6 +76,100 @@ def _log_debug_message(message: str, *, level: str = "info", context: str | None
     logs = st.session_state.setdefault("workflow_debug_messages", [])
     logs.append(entry)
     st.session_state["workflow_debug_messages"] = logs[-200:]
+
+
+def _format_emotions_json_to_markdown(data: dict) -> str:
+    """Convierte el JSON de análisis de emociones a markdown con la tipografía del resto de la web."""
+    if not data or "workshops" not in data:
+        return "No hay datos disponibles."
+    
+    markdown_parts = []
+    
+    for workshop in data.get("workshops", []):
+        taller_name = workshop.get("taller", "Taller")
+        markdown_parts.append(f"## {taller_name}\n")
+        
+        emociones_por_encuadre = workshop.get("emociones_por_encuadre", {})
+        if emociones_por_encuadre:
+            markdown_parts.append("### Emociones por encuadre\n")
+            
+            for encuadre, emociones in emociones_por_encuadre.items():
+                if emociones:
+                    emociones_str = ", ".join(emociones)
+                    markdown_parts.append(f"**{encuadre}:** {emociones_str}\n")
+        
+        resumen = workshop.get("resumen", "")
+        if resumen:
+            markdown_parts.append(f"\n### Resumen\n\n{resumen}\n")
+        
+        preguntas = workshop.get("preguntas_discusion", [])
+        if preguntas:
+            markdown_parts.append("\n### Preguntas para la discusión\n")
+            for pregunta in preguntas:
+                markdown_parts.append(f"- {pregunta}\n")
+        
+        markdown_parts.append("\n---\n")
+    
+    return "\n".join(markdown_parts)
+
+
+def _format_gender_json_to_markdown(data: dict) -> str:
+    """Convierte el JSON de análisis de género a markdown con la tipografía del resto de la web."""
+    if not data or "analisis_genero" not in data:
+        return "No hay datos disponibles."
+    
+    markdown_parts = []
+    
+    for analisis in data.get("analisis_genero", []):
+        taller_name = analisis.get("taller", "Taller")
+        markdown_parts.append(f"## {taller_name}\n")
+        
+        patrones = analisis.get("patrones_por_genero", {})
+        if patrones:
+            markdown_parts.append("### Patrones por género\n")
+            for genero, sintesis in patrones.items():
+                markdown_parts.append(f"**{genero}:**\n")
+                markdown_parts.append(f"{sintesis}\n\n")
+        
+        hallazgos = analisis.get("hallazgos_transversales", "")
+        if hallazgos:
+            markdown_parts.append(f"### Hallazgos transversales\n\n{hallazgos}\n")
+        
+        preguntas = analisis.get("preguntas_discusion", [])
+        if preguntas:
+            markdown_parts.append("\n### Preguntas para la discusión\n")
+            for pregunta in preguntas:
+                markdown_parts.append(f"- {pregunta}\n")
+        
+        markdown_parts.append("\n---\n")
+    
+    return "\n".join(markdown_parts)
+
+
+def _format_general_json_to_markdown(data: dict) -> str:
+    """Convierte el JSON de análisis general a markdown con la tipografía del resto de la web."""
+    if not data or "resumen_general" not in data:
+        return "No hay datos disponibles."
+    
+    markdown_parts = []
+    resumen = data.get("resumen_general", {})
+    
+    patrones = resumen.get("patrones_transversales", "")
+    if patrones:
+        markdown_parts.append("### Patrones transversales\n")
+        markdown_parts.append(f"{patrones}\n")
+    
+    sesgos = resumen.get("sesgos_identificados", [])
+    if sesgos:
+        markdown_parts.append("\n### Sesgos identificados\n")
+        for sesgo in sesgos:
+            markdown_parts.append(f"- {sesgo}\n")
+    
+    hallazgos = resumen.get("hallazgos_clave", "")
+    if hallazgos:
+        markdown_parts.append(f"\n### Hallazgos clave\n\n{hallazgos}\n")
+    
+    return "\n".join(markdown_parts)
 
 
 # ---------- HELPER FUNCTIONS (kept here for page-specific logic) ----------
@@ -824,6 +916,7 @@ Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado
 El texto debe:
 
 - Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
+- Estar contextualizado en el estado de Zacatecas 
 - Mantener una **estructura noticiosa clásica**:
   - **Título factual y conciso.**
   - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
@@ -881,49 +974,12 @@ def render_form2_page():
     if FORM2_URL:
         qr = _qr_image_for(FORM2_URL)
         if qr:
-            st.markdown("""
-            <div style="display:flex; justify-content:center;">
-                <div>
-            """, unsafe_allow_html=True)
-            st.image(qr, caption="Escanea para abrir Cuestionario 2", width=360)
-            st.markdown("""
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            left, center, right = st.columns([1, 2, 1])
+            with center:
+                st.image(qr, caption="Escanea para abrir Cuestionario 2", width=360)
         st.link_button("📝 Abrir Cuestionario 2", FORM2_URL, use_container_width=True)
     else:
         st.warning("Configura FORM2_URL en secrets para mostrar el QR y el enlace.")
-
-    import streamlit.components.v1 as components
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRaebZz22IS0wvo2TCloAKiyWxMNVryduW0ZcoQaNwZRwAkSZSDy3thcf3IcJua-64lHH7LQb2czPkx/pubembed?start=false&loop=false&delayms=3000"
-                    allowfullscreen="true"
-                    mozallowfullscreen="true"
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,
-    )
     st.markdown("---")
     dom = st.session_state.get("dominant_theme")
     if not dom:
@@ -1098,7 +1154,7 @@ def render_news_flow_page():
 
 def render_news_comparison_page():
     """Visualiza las tres versiones de la noticia para comparar encuadres."""
-    st.header("🔍 Comparativa de encuadres")
+    st.header("Noticias 1, 2 y 3")
 
     news_blocks = st.session_state.get("generated_news_blocks")
     if not news_blocks:
@@ -1107,37 +1163,6 @@ def render_news_comparison_page():
 
     st.caption("1. Observa cómo cambia la narrativa del mismo hecho según el encuadre.")
     st.caption("2. Utiliza esta comparativa para discutir tono, sesgos y emociones que provoca cada versión.")
-
-    import streamlit.components.v1 as components
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ1An6Z_P3J6W-zSxWSkPmRG2qZrCeLMZASNo_2mv-SLUY77LkMIITcqWy4-bEJrLtyPq2kpR4MUEjl/pubembed?start=false&loop=false&delayms=3000"
-                    allowfullscreen="true"
-                    mozallowfullscreen="true"
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,
-    )
 
     for block in news_blocks:
         _typing_then_bubble(
@@ -1257,39 +1282,8 @@ def render_workshop_insights_page():
 
     st.markdown("---")
 
-    # --- Dashboard (estático) ---
-    import streamlit.components.v1 as components
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQeTeCMGumZ5X4xw0Yv4M20siYdt6_hWaXc4BvdXnRJ6HmMZRWMoZFBE7hF6EE8E13mV92hUZyooqeQ/pubembed?start=false&loop=false&delayms=3000"
-                    allowfullscreen="true"
-                    mozallowfullscreen="true"
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,
-    )
-
     st.subheader("Dashboard (Looker Studio)")
+    import streamlit.components.v1 as components
     try:
         components.html(
             """
@@ -1320,25 +1314,25 @@ def render_workshop_insights_page():
             </iframe>
         </div>
             """,
-            height=520
+            height=800
         )
     except Exception:
         st.info("Agrega aquí el embed público de tu reporte de Looker Studio.")
 
     st.markdown("---")
 
-    # --- Síntesis automática con IA (usa datos reales combinados) ---
-    st.subheader("🧠 Interpretación automática de resultados")
-    st.caption("Se combinan respuestas de Cuestionario 0/1/2/3/4 (si están configurados) y se genera una síntesis para facilitar el debate.")
+    # --- Cargar datos para análisis ---
+    st.subheader("📊 Cargar datos para análisis")
+    st.caption("Carga y prepara los datos combinados de los cuestionarios para los análisis generativos.")
     
     # Mostrar información sobre el taller seleccionado
     workshop_date = st.session_state.get("selected_workshop_date")
     if workshop_date:
         st.info(f"📅 Analizando respuestas del taller del {workshop_date}")
     else:
-        st.warning("⚠️ No hay taller seleccionado. Ve a 'Cuestionario para formador' para seleccionar una fecha.")
+        st.warning("⚠️ No hay taller seleccionado. Ve a 'Configuraciones' para seleccionar una fecha.")
 
-    if st.button("🔎 Analizar respuestas", type="primary", use_container_width=True):
+    if st.button("📥 Cargar datos combinados", type="primary", use_container_width=True):
         # 1) Lee datos combinados
         df_all = None
         join_key = None
@@ -1394,24 +1388,7 @@ def render_workshop_insights_page():
             st.warning("No hay datos suficientes de Form1 o Form2 para generar el análisis.")
             return
 
-        # 4) Construir bloque de noticias para el análisis final
-        news_blocks = []
-        raw_news = st.session_state.get("generated_news_raw")
-        encuadres_catalog = [
-            "Desconfianza y responsabilización de actores",
-            "Polarización social y exclusión",
-            "Miedo y control",
-        ]
-        if raw_news:
-            parsed_news = _parse_news_blocks(raw_news)
-            for idx, block in enumerate(parsed_news):
-                enc = encuadres_catalog[idx] if idx < len(encuadres_catalog) else block.get("encuadre") or f"Encuadre {idx+1}"
-                news_blocks.append({
-                    "encuadre": enc,
-                    "text": block.get("text", "")
-                })
-
-        # 5) Contexto del Form 0 en caso de que no esté disponible en sesión
+        # 4) Contexto del Form 0 en caso de que no esté disponible en sesión
         form0_context_text = st.session_state.get("form0_context_text", "")
         if not form0_context_text and not df_form0.empty:
             form0_context_text = "\n".join([
@@ -1419,7 +1396,7 @@ def render_workshop_insights_page():
                 for i, row in enumerate(df_form0.to_dict('records')[:30])
             ])
 
-        # 6) Normalizar datos para el análisis final
+        # 5) Normalizar datos para el análisis final
         try:
             df_normalized = _normalize_form_data(df_form1, df_form2, workshop_date)
         except Exception as e:
@@ -1430,24 +1407,12 @@ def render_workshop_insights_page():
             st.warning("La normalización devolvió un conjunto vacío. Revisa que Form1/Form2 tengan respuestas válidas.")
             return
 
-        dominant_theme = st.session_state.get("dominant_theme", "(tema dominante no definido)")
-
-        try:
-            with st.spinner("📊 Generando análisis final con IA…"):
-                report = _analyze_final_report(
-                    df_long_normalized=df_normalized,
-                    dominant_theme=dominant_theme,
-                    news_blocks=news_blocks,
-                    form0_context_text=form0_context_text,
-                )
-            st.markdown(report)
-        except Exception as e:
-            st.error(f"Error generando interpretación automática: {e}")
-
         # Persistir datos para los análisis adicionales
         st.session_state["analysis_df_all"] = df_all
         st.session_state["analysis_df_normalized"] = df_normalized
         st.session_state["analysis_form0_context"] = form0_context_text
+        
+        st.success("✅ Datos cargados y preparados. Ahora puedes ejecutar los análisis generativos.")
 
     df_all_cached = st.session_state.get("analysis_df_all")
     form0_context_cached = st.session_state.get("analysis_form0_context", "")
@@ -1461,10 +1426,11 @@ def render_workshop_insights_page():
         )
     if st.button("➕ Agregar análisis generativo", key="btn_emociones"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
-            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+            st.warning("Primero ejecuta '📥 Cargar datos combinados' para preparar los datos.")
         else:
             data = analyze_emotions_json(df_all_cached, dominant_theme_cached, form0_context_cached)
-            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
+            markdown_output = _format_emotions_json_to_markdown(data)
+            st.markdown(markdown_output)
 
 
     st.markdown("### Analizar impactos por género")
@@ -1475,10 +1441,11 @@ def render_workshop_insights_page():
         )
     if st.button("➕ Agregar análisis generativo", key="btn_genero"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
-            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+            st.warning("Primero ejecuta '📥 Cargar datos combinados' para preparar los datos.")
         else:
             data = analyze_gender_impacts_json(df_all_cached, dominant_theme_cached, form0_context_cached)
-            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
+            markdown_output = _format_gender_json_to_markdown(data)
+            st.markdown(markdown_output)
 
 
     st.markdown("### Análisis general del taller")
@@ -1489,10 +1456,11 @@ def render_workshop_insights_page():
         )
     if st.button("➕ Agregar análisis generativo", key="btn_general"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
-            st.warning("Primero ejecuta ‘Analizar respuestas’ para cargar los datos combinados.")
+            st.warning("Primero ejecuta '📥 Cargar datos combinados' para preparar los datos.")
         else:
             data = analyze_general_json(df_all_cached, dominant_theme_cached, form0_context_cached)
-            st.markdown(f"```json\n{json.dumps(data, ensure_ascii=False, indent=2)}\n```")
+            markdown_output = _format_general_json_to_markdown(data)
+            st.markdown(markdown_output)
 
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------
@@ -1504,7 +1472,7 @@ ROUTES = {
     "Noticia neutral del taller": render_neutral_news_page,
     "Cuestionario 2": render_form2_page,                          
     "Noticias del taller": render_news_flow_page,
-    "Comparativa de encuadres": render_news_comparison_page,
+    "Noticias 1, 2 y 3": render_news_comparison_page,
     "Explicacion del taller": render_explanation_page,                
     "Análisis final del taller": render_workshop_insights_page,   
 }

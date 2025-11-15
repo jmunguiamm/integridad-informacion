@@ -138,7 +138,7 @@ def analyze_final_report(
     dominant_theme: str,       # st.session_state["dominant_theme"]
     news_blocks: list[dict],   # [{'encuadre': '...', 'text': '...'}, ...] (3 items)
     form0_context_text: str = ""  # (opcional) contexto de Form 0 en crudo o resumido
-) -> str:
+    ) -> str:
     """
     Genera el informe final (texto + instrucciones de gráficos) usando IA,
     con contexto del tema dominante, textos y encuadres de las noticias y
@@ -172,8 +172,8 @@ def analyze_final_report(
 
     # 3) Construir prompt 
     prompt = f"""
-Contexto:
-Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento,
+    Contexto:
+        Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento,
 cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando,
 para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y
 (c) elementos clave que llamaron su atención.
@@ -187,8 +187,8 @@ Insumos clave del taller:
 - Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
 - Noticias generadas (encuadre + texto):
 {news_block_txt}
-
-Datos normalizados de respuestas (CSV; columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor):
+"
+- Datos normalizados de respuestas (CSV; columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor):
 {csv_preview}
 
 Metodología de análisis requerida:
@@ -262,8 +262,14 @@ Los participantes respondieron un formulario indicando las emociones, nivel de c
 
 Tema dominante: "{dominant_theme}"
 Contexto Form 0: "{(form0_context_text or '').strip()}"
-
-Datos de entrada:
+- Tipos de encuadre narrativo: 
+- Encuadres narrativos: "Encuadre de desconfianza y responsabilización de actores:
+    Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
+    Encuadre de polarización social y exclusión:
+    Amplifica divisiones sociales y políticas apelando a emociones intensas como miedo, ira y resentimiento, favoreciendo el enfrentamiento simbólico y la construcción de “enemigos” mediante la atribución de problemas a ciertos grupos o sectores sin evidencia. Utiliza lenguaje emocional y alarmista, acentúa la contraposición entre “ellos” y “nosotros”, refuerza prejuicios y resentimientos, y busca validación emocional más que racional. Se caracteriza por culpabilización generalizada (“los migrantes”, “los jóvenes”, “las mujeres”), ausencia de pluralidad de voces, juicios sin pruebas, asociaciones repetitivas entre grupo y problema, y recursos gráficos como signos de exclamación, mayúsculas parciales, puntos suspensivos (…) y emojis de conflicto (😡 😤 🔥 ⚔️ 💣 🚫) que evidencian la carga emocional y el antagonismo. 
+    Encuadre de miedo y control:
+    Exagera el peligro o la amenaza para justificar medidas extremas, autoritarias o de control, utilizando un lenguaje apocalíptico, urgente y totalizador, acompañado de imágenes impactantes o repetitivas de violencia y ausencia de datos verificables. Recurre a la justificación del control o vigilancia, limita la libertad mediante recomendaciones alarmistas, y enfatiza la desesperación con signos de puntuación exagerados (‼️, ❗❗❗, …, ???, !!! →), emojis de alerta o terror (😱 😨 😰 💀 🔥 ⚠️ 🚨 💣 👁️‍🗨️ 🔒 📹 🔔 🧟), uso de mayúsculas parciales y repeticiones dramáticas como “Ya es tarde… demasiado tarde… 😨”, todo ello para generar una atmósfera de miedo, urgencia y control."
+- Datos de entrada:
 {sample_txt}
 
 ---
@@ -272,10 +278,21 @@ Datos de entrada:
 Identificar cómo las **emociones** varían según el encuadre narrativo dentro de cada taller.
 
 🧩 Tareas:
-1️⃣ Agrupa respuestas por “Taller” y por “Encuadre”.
 2️⃣ Analiza variaciones de emociones y confianza percibida.
 3️⃣ Resume hallazgos principales (no inventes información ausente).
-4️⃣ Genera **dos preguntas de debate** para el grupo.
+4️⃣ Genera **dos preguntas de debate** (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos sobre las emociones presentadas en cada encuadre.
+
+Ejemplo: 
+-¿Por qué crees que el encuadre de desconfianza institucional genera más emociones de desaprobación que el de miedo y control? 
+- ¿Cómo influyeron los diferentes encuadres en la percepción emocional del grupo?
+-¿Cómo influyeron los diferentes encuadres en la percepción emocional del grupo?
+
+
+Reglas:
+- Usa únicamente información derivada de los datos provistos (no inventes).
+- Tono analítico y educativo, claro y sintético.
+- Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
+- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
 
 ---
 
@@ -294,13 +311,6 @@ Identificar cómo las **emociones** varían según el encuadre narrativo dentro 
     }}
   ]
 }}
----
-
-🧠 Reglas:
-- Usa únicamente la información visible en los datos.
-- Tono analítico, educativo y sintético.
-- No generalices ni inventes información fuera del dataset.
-- Si hay poca información, indica “Datos insuficientes”.
 """
 
     with st.spinner("Analizando emociones por encuadre..."):
@@ -323,25 +333,33 @@ def analyze_gender_impacts_json(df_all, dominant_theme: str, form0_context_text:
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
     prompt = f"""
+Rol:
 Eres un analista en ciencia de datos que explora impactos interseccionales en talleres de integridad de la información.
 
-Tema dominante: "{dominant_theme}"
-Contexto Form 0: "{(form0_context_text or '').strip()}"
-
-Datos combinados:
+Insumos clave del taller:
+- Tema dominante: "{dominant_theme}"
+- Contexto Form 0: "{(form0_context_text or '').strip()}"
+- Tipos de encuadre narrativo: 
+- Encuadres narrativos: "Encuadre de desconfianza y responsabilización de actores:
+    Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
+    Encuadre de polarización social y exclusión:
+    Amplifica divisiones sociales y políticas apelando a emociones intensas como miedo, ira y resentimiento, favoreciendo el enfrentamiento simbólico y la construcción de “enemigos” mediante la atribución de problemas a ciertos grupos o sectores sin evidencia. Utiliza lenguaje emocional y alarmista, acentúa la contraposición entre “ellos” y “nosotros”, refuerza prejuicios y resentimientos, y busca validación emocional más que racional. Se caracteriza por culpabilización generalizada (“los migrantes”, “los jóvenes”, “las mujeres”), ausencia de pluralidad de voces, juicios sin pruebas, asociaciones repetitivas entre grupo y problema, y recursos gráficos como signos de exclamación, mayúsculas parciales, puntos suspensivos (…) y emojis de conflicto (😡 😤 🔥 ⚔️ 💣 🚫) que evidencian la carga emocional y el antagonismo. 
+    Encuadre de miedo y control:
+    Exagera el peligro o la amenaza para justificar medidas extremas, autoritarias o de control, utilizando un lenguaje apocalíptico, urgente y totalizador, acompañado de imágenes impactantes o repetitivas de violencia y ausencia de datos verificables. Recurre a la justificación del control o vigilancia, limita la libertad mediante recomendaciones alarmistas, y enfatiza la desesperación con signos de puntuación exagerados (‼️, ❗❗❗, …, ???, !!! →), emojis de alerta o terror (😱 😨 😰 💀 🔥 ⚠️ 🚨 💣 👁️‍🗨️ 🔒 📹 🔔 🧟), uso de mayúsculas parciales y repeticiones dramáticas como “Ya es tarde… demasiado tarde… 😨”, todo ello para generar una atmósfera de miedo, urgencia y control."
+- Datos combinados:
 {sample_txt}
 
 ---
+Tareas:
+Identifica los patrones y hallazgos relevantes de las respuestas e identifica contrastes significativos.
+Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables del género con los encuadres narrativos y niveles de confianza.
+En no más de dos párrafos de 4 líneas describe los hallazgos principales de estos cruces. Ejemplo: “Las mujeres mostraron una mayor sensibilidad emocional  a la noticia con el encuadre de polarización y su nivel de confianza en la credibilidad de la noticia fue mayor que los otros géneros, mientras que los hombres tendieron a reaccionar más y confiar más en las noticias con los mensajes del encuadre de responsabilización institucional.”
+Genera dos preguntas (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos. 
 
-🎯 Objetivo:
-Identificar diferencias de reacción emocional, confianza y percepción según género y tipo de encuadre.
-
-🧩 Tareas:
-1️⃣ Analiza respuestas por género y encuadre.
-2️⃣ Resume patrones o contrastes significativos.
-3️⃣ Describe correlaciones entre género, confianza y emociones.
-4️⃣ Si los datos son limitados, indícalo.
-5️⃣ Genera dos preguntas de debate (máx. 20 palabras cada una).
+Ejemplos de preguntas de discusión: 
+-¿Qué relación podría haber entre el género y la percepción del las emociones? 
+-¿Cómo podrían influir estas diferencias en la forma en la que reaccionamos a las noticias?
+-¿Qué rol juegan las emociones en el nivel de confianza que se le otorgó a los difenrentes encuadres? 
 
 📄 Formato JSON:
 {{
@@ -360,10 +378,11 @@ Identificar diferencias de reacción emocional, confianza y percepción según g
 }}
 ---
 
-🧠 Reglas:
-- Mantén tono analítico y educativo.
-- No generalices ni uses lenguaje discriminatorio.
-- Usa solo información presente.
+ Reglas:
+- Usa únicamente información derivada de los datos provistos (no inventes).
+- Tono analítico y educativo, claro y sintético.
+- Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
+- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
 """
 
     with st.spinner("Analizando impactos diferenciados por género..."):
@@ -386,12 +405,26 @@ def analyze_general_json(df_all, dominant_theme: str, form0_context_text: str):
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
     prompt = f"""
-Eres un analista de datos cualitativos en comunicación y percepción pública.
+Contexto:
+Dentro del taller de integridad de la información se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. 
+Los participantes completaron un formulario indicando, para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y (c) elementos clave que llamaron su atención.
 
-Tema dominante: "{dominant_theme}"
-Contexto Form 0: "{(form0_context_text or '').strip()}"
+Rol:
+Eres un analista en ciencia de datos que trabaja con los datos para generar análisis interseccionales sobre la integridad de la información
 
-Datos combinados:
+Insumos clave del taller:
+- Tema dominante (derivado del análisis previo): "{dominant_theme}"
+- Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+- Tipos de encuadre narrativo: 
+Encuadre de desconfianza y responsabilización de actores:
+Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
+Encuadre de polarización social y exclusión:
+Amplifica divisiones sociales y políticas apelando a emociones intensas como miedo, ira y resentimiento, favoreciendo el enfrentamiento simbólico y la construcción de “enemigos” mediante la atribución de problemas a ciertos grupos o sectores sin evidencia. Utiliza lenguaje emocional y alarmista, acentúa la contraposición entre “ellos” y “nosotros”, refuerza prejuicios y resentimientos, y busca validación emocional más que racional. Se caracteriza por culpabilización generalizada (“los migrantes”, “los jóvenes”, “las mujeres”), ausencia de pluralidad de voces, juicios sin pruebas, asociaciones repetitivas entre grupo y problema, y recursos gráficos como signos de exclamación, mayúsculas parciales, puntos suspensivos (…) y emojis de conflicto (😡 😤 🔥 ⚔️ 💣 🚫) que evidencian la carga emocional y el antagonismo.
+Encuadre de miedo y control:
+Exagera el peligro o la amenaza para justificar medidas extremas, autoritarias o de control, utilizando un lenguaje apocalíptico, urgente y totalizador, acompañado de imágenes impactantes o repetitivas de violencia y ausencia de datos verificables. Recurre a la justificación del control o vigilancia, limita la libertad mediante recomendaciones alarmistas, y enfatiza la desesperación con signos de puntuación exagerados (‼️, ❗❗❗, …, ???, !!! →), emojis de alerta o terror (😱 😨 😰 💀 🔥 ⚠️ 🚨 💣 👁️‍🗨️ 🔒 📹 🔔 🧟), uso de mayúsculas parciales y repeticiones dramáticas como “Ya es tarde… demasiado tarde… 😨”, todo ello para generar una atmósfera de miedo, urgencia y control.
+- Contexto Form 1  
+- Contexto Form 2
+Datos de entrada:
 {sample_txt}
 
 ---
@@ -400,10 +433,10 @@ Datos combinados:
 Detectar patrones transversales entre emociones, confianza, encuadres y sesgos cognitivos percibidos.
 
 🧩 Tareas:
-1️⃣ Analiza variaciones entre encuadres narrativos.
-2️⃣ Identifica posibles sesgos cognitivos (confirmación, atribución, negatividad, etc.).
-3️⃣ Resume hallazgos principales en dos párrafos breves.
-4️⃣ Si los datos son limitados, indícalo explícitamente.
+- Identifica los patrones y hallazgos relevantes de las respuestas y compara entre sí emergen contrastes significativos.
+- Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables de los formularios, y la información de los tipos de encuadres y  los tipos de sesgos cognitivos.
+- En función de las respuestas identifica algunos sesgos que puedan estar asociados. 
+- En no más de dos párrafos de 4 líneas describe los hallazgos principales y las conclusiones de los hallazgos.
 
 📄 Formato JSON:
 {{
@@ -414,11 +447,14 @@ Detectar patrones transversales entre emociones, confianza, encuadres y sesgos c
   }}
 }}
 ---
-
-🧠 Reglas:
-- Tono analítico, educativo y sintético.
-- No inventes información ni generalices.
-- Destaca solo correlaciones que puedan inferirse del dataset.
+Reglas:
+- Usa únicamente información derivada de los datos provistos (no inventes).
+- Tono analítico y educativo, claro y sintético.
+- Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
+- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
+- Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
+- Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
+- Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
 """
 
     with st.spinner("Generando análisis general del taller..."):
