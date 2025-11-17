@@ -117,18 +117,7 @@ def typing_then_bubble(
     # Burbuja verde tipo WhatsApp
     html_block = f"""
     <div style="display:flex; justify-content:flex-end; margin:10px 0;">
-    <div style="
-        background-color:#dcf8c6;
-        border-radius:18px 18px 4px 18px;
-        padding:12px 16px;
-        max-width:90%;
-        font-family:'Roboto', system-ui, -apple-system, sans-serif;
-        font-size:15px;
-        color:#111;
-        line-height:1.5;
-        box-shadow:0 2px 4px rgba(0,0,0,0.2);
-        animation: fadeIn 0.4s ease-out;
-    ">
+    <div class="whatsapp-bubble">
         <div style="color:#777;font-size:12px;margin-bottom:4px;">↪︎↪︎ Reenviado muchas veces</div>
         {safe_msg}
         {embedded_html}
@@ -140,6 +129,23 @@ def typing_then_bubble(
         @keyframes fadeIn {{
             from {{opacity:0; transform:translateY(8px);}}
             to {{opacity:1; transform:translateY(0);}}
+        }}
+        .whatsapp-bubble {{
+            background-color:#dcf8c6;
+            border-radius:18px 18px 4px 18px;
+            padding:12px 16px;
+            width: min(430px, 85vw);
+            font-family:'Roboto', system-ui, -apple-system, sans-serif;
+            font-size:15px;
+            color:#111;
+            line-height:1.5;
+            box-shadow:0 2px 4px rgba(0,0,0,0.2);
+            animation: fadeIn 0.4s ease-out;
+        }}
+        .whatsapp-bubble img {{
+            max-height:260px;
+            width:100%;
+            object-fit:cover;
         }}
         </style>
         """

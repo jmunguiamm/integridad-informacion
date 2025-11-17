@@ -8,6 +8,7 @@ import difflib
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 
 # ---------- IMPORTS FROM MODULES ----------
 from config.secrets import read_secrets, forms_sheet_id
@@ -861,9 +862,37 @@ def render_neutral_news_page():
     workshop_date = st.session_state.get("selected_workshop_date")
     form0_context = st.session_state.get("form0_context_text", "")
 
+   # Cargar Form 0 para extraer fecha de implementación y municipio
+    FORMS_SHEET_ID = _forms_sheet_id()
+    FORM0_TAB = _read_secrets("FORM0_TAB", "")
+    SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
+    
+    fecha_implementacion = None
+    municipio = None
+    
+    if FORMS_SHEET_ID and FORM0_TAB and SA and workshop_date:
+        try:
+            df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+            if not df0.empty:
+                df0 = _filter_df_by_date(df0, workshop_date)
+                if not df0.empty:
+                    fecha_cols = [col for col in df0.columns if 'fecha' in col.lower() and 'implementacion' in col.lower()]
+                    municipio_cols = [col for col in df0.columns if 'municipio' in col.lower()]
+                    
+                    if fecha_cols:
+                        fecha_implementacion = df0[fecha_cols[0]].iloc[0] if pd.notna(df0[fecha_cols[0]].iloc[0]) else None
+                    if municipio_cols:
+                        municipio = df0[municipio_cols[0]].iloc[0] if pd.notna(df0[municipio_cols[0]].iloc[0]) else None
+        except Exception as e:
+            st.caption(f"Nota: No se pudieron cargar datos del Form 0 para contexto adicional: {e}")
+
     st.markdown(f"**Tema dominante actual:** `{dominant_theme}`")
     if workshop_date:
         st.caption(f"Contextualizas esta noticia para el taller del {workshop_date}.")
+    if municipio:
+        st.caption(f"📍 Municipio: {municipio}")
+    if fecha_implementacion:
+        st.caption(f"📅 Fecha de implementación: {fecha_implementacion}")
 
     import streamlit.components.v1 as components
     components.html(
@@ -904,6 +933,19 @@ def render_neutral_news_page():
     st.markdown("---")
 
     if st.button("✍️ Mostrar noticia neutral", type="primary", use_container_width=True):
+        # Preparar contexto de fecha y ubicación
+        contexto_fecha = ""
+        if fecha_implementacion:
+            contexto_fecha = f"- El hecho debe haber ocurrido alrededor de la fecha de implementación del taller: {fecha_implementacion}."
+        
+        # Construir contexto de ubicación de forma flexible
+        if municipio:
+            contexto_ubicacion = f"el municipio de {municipio}"
+        elif municipio:
+            contexto_ubicacion = f"el municipio de {municipio}" 
+        else:
+            contexto_ubicacion = "la región correspondiente"
+        
         prompt = f"""
     Contexto general:
 En un ejercicio previo, se identificaron los tópicos dominantes {dominant_theme} y las emociones asociadas que generan percepciones de inseguridad según las respuestas del [formulario 1]. Con base en esos hallazgos, se elaboró una nube de palabras que refleja los temas y emociones predominantes.
@@ -916,7 +958,8 @@ Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado
 El texto debe:
 
 - Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
-- Estar contextualizado en el estado de Zacatecas 
+{contexto_fecha}
+- Estar contextualizado en {contexto_ubicacion}
 - Mantener una **estructura noticiosa clásica**:
   - **Título factual y conciso.**
   - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
@@ -1158,54 +1201,26 @@ def render_news_comparison_page():
 
     news_blocks = st.session_state.get("generated_news_blocks")
     if not news_blocks:
-        st.warning("Aún no se han generado las noticias con encuadres. Ve a ‘Noticias del taller’ y créalas primero.")
+        st.warning("Aún no se han generado las noticias con encuadres. Ve a 'Noticias del taller' y créalas primero.")
         return
 
     st.caption("1. Observa cómo cambia la narrativa del mismo hecho según el encuadre.")
     st.caption("2. Utiliza esta comparativa para discutir tono, sesgos y emociones que provoca cada versión.")
+    st.markdown("---")
 
-    for block in news_blocks:
-        _typing_then_bubble(
-            message_text=block.get("text", "(sin contenido)"),
-            image_path=block.get("image"),
-            encuadre=None,
-        )
+    # Mostrar cada noticia en un desplegable
+    for idx, block in enumerate(news_blocks, 1):
+        with st.expander(f"📱 Noticia {idx}", expanded=False):
+            _typing_then_bubble(
+                message_text=block.get("text", "(sin contenido)"),
+                image_path=block.get("image"),
+                encuadre=None,
+            )
     st.markdown("---")
 
 def render_explanation_page():
     """📘 Página intermedia entre Noticias y Análisis final."""
     st.header("📘 Explicación del Taller")
-    import streamlit.components.v1 as components
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTkU-vW_Gll9JioqavlZZe_DzkO3s_pnQ9cMEZLJaQ5SdOVRq2ihCXsMbKl8WderKhff6sWAqXO7YgS/pubembed?start=false&loop=false&delayms=3000"
-                    allowfullscreen="true"
-                    mozallowfullscreen="true"
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,
-    )
-    
     st.markdown("""
     En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final.
     """)
@@ -1220,6 +1235,183 @@ def render_explanation_page():
     st.text_area("descripcion_encuadres_usado", " Descripción del encuadre de desconfianza y responsabilización de actores. Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano. Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. Descripción del encuadre de  polarización social y exclusión. Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de 'enemigos'. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia.", height=150)
 
     st.markdown("---")
+
+
+def render_conclusion_page():
+    """Página de conclusión con gráficos de las últimas 3 preguntas de Form 2."""
+    st.header("🎯 Conclusión")
+    
+    FORMS_SHEET_ID = _forms_sheet_id()
+    FORM2_TAB = _read_secrets("FORM2_TAB", "")
+    SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
+    workshop_date = st.session_state.get("selected_workshop_date")
+    
+    if not (FORMS_SHEET_ID and FORM2_TAB and SA):
+        st.warning("⚠️ Configura las credenciales en 'Configuraciones' para ver los resultados.")
+        return
+    
+    if not workshop_date:
+        st.warning("⚠️ Selecciona una fecha de taller en 'Configuraciones'.")
+        return
+    
+    try:
+        with st.spinner("📥 Cargando datos de Form 2..."):
+            df_form2 = _sheet_to_df(FORMS_SHEET_ID, FORM2_TAB)
+        
+        if df_form2.empty:
+            st.warning("⚠️ No hay datos en Form 2.")
+            return
+        
+        # Filtrar por fecha del taller
+        df_form2 = _filter_df_by_date(df_form2, workshop_date)
+        
+        if df_form2.empty:
+            st.warning(f"⚠️ No hay datos de Form 2 para el taller del {workshop_date}.")
+            return
+        
+        # Identificar columnas de metadata que debemos excluir
+        metadata_cols = ["Marca temporal", "Ingresa el número asignado en la tarjeta que se te dio"]
+        # También buscar variaciones de estas columnas
+        metadata_patterns = ["marca", "temporal", "tarjeta", "número", "numero", "number", "card"]
+        
+        # Filtrar columnas: excluir metadata y obtener solo las de preguntas
+        question_cols = []
+        for col in df_form2.columns:
+            col_lower = col.lower().strip()
+            # Excluir si es metadata
+            if any(pattern in col_lower for pattern in metadata_patterns):
+                continue
+            # Excluir si está en la lista exacta
+            if col in metadata_cols:
+                continue
+            question_cols.append(col)
+        
+        if len(question_cols) < 3:
+            st.warning(f"⚠️ Se encontraron menos de 3 preguntas en Form 2. Columnas encontradas: {len(question_cols)}")
+            st.caption(f"Columnas detectadas: {', '.join(question_cols[:10])}")
+            return
+        
+        # Obtener las últimas 3 preguntas
+        last_3_questions = question_cols[-3:]
+        card_column_candidates = [col for col in df_form2.columns if "tarjeta" in col.lower()]
+        card_column = card_column_candidates[0] if card_column_candidates else None
+        
+        st.success(f"✅ Datos cargados: {len(df_form2)} respuestas del taller del {workshop_date}")
+        st.markdown(
+            "Gracias por completar juntos este taller! A continuación tienes un pequeño análisis final de "
+            "vuestras respuestas de los 3 encuadres narrativos. Veamos cuáles son las respuestas correctas."
+        )
+        st.markdown("---")
+        
+        encuadre_correcto_map = {
+            1: "encuadre 1",
+            2: "encuadre 2",
+            3: "encuadre 3",
+        }
+        # Crear gráficos para cada una de las 3 preguntas
+        for idx, question_col in enumerate(last_3_questions, 1):
+            st.subheader(f"Encuadre de noticia {idx}")
+            st.caption(question_col)
+            
+            # Obtener respuestas válidas (excluir NaN y vacíos)
+            responses = df_form2[question_col].dropna()
+            responses = responses[responses.astype(str).str.strip() != ""]
+            
+            if responses.empty:
+                st.info("No hay respuestas para esta pregunta.")
+                st.markdown("---")
+                continue
+            
+            # Contar respuestas
+            value_counts = responses.value_counts()
+            total = len(responses)
+            
+            # Calcular porcentajes
+            percentages = (value_counts / total * 100).round(1)
+            
+            # Crear DataFrame para el gráfico
+            chart_data = pd.DataFrame({
+                "Opción": value_counts.index,
+                "Cantidad": value_counts.values,
+                "Porcentaje": percentages.values
+            })
+            
+            # Ordenar por cantidad (descendente)
+            chart_data = chart_data.sort_values("Cantidad", ascending=False)
+            
+            # Mostrar métricas
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total de respuestas", total)
+            with col2:
+                st.metric("Opciones distintas", len(value_counts))
+            
+            # Crear gráfico de barras horizontal con porcentajes
+            correct_label = encuadre_correcto_map.get(idx, "")
+            chart_data["Es correcta"] = chart_data["Opción"].astype(str).str.lower().apply(
+                lambda option: correct_label in option if correct_label else False
+            )
+            fig = px.bar(
+                chart_data,
+                x="Porcentaje",
+                y="Opción",
+                orientation='h',
+                text="Porcentaje",
+                labels={"Porcentaje": "Porcentaje (%)", "Opción": "Opción seleccionada"},
+                title=f"Distribución de respuestas - Encuadre de noticia {idx}",
+                color="Es correcta",
+                color_discrete_map={True: "#2ecc71", False: "#7f7f7f"},
+            )
+            fig.update_traces(texttemplate='%{text}%', textposition='outside')
+            fig.update_layout(
+                height=400,
+                xaxis_title="Porcentaje (%)",
+                yaxis_title="",
+                showlegend=False,
+                margin=dict(l=20, r=20, t=40, b=20)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Mostrar tabla detallada
+            with st.expander(f"📊 Ver detalles de la Pregunta {idx}"):
+                st.dataframe(
+                    chart_data[["Opción", "Cantidad", "Porcentaje"]].style.format({"Porcentaje": "{:.1f}%"}), 
+                    use_container_width=True,
+                    hide_index=True
+                )
+            
+            st.markdown("---")
+
+        tarjetas_acertadas = []
+        if card_column:
+            expected_labels = ["encuadre 1", "encuadre 2", "encuadre 3"]
+            subset = df_form2[[card_column] + last_3_questions].dropna(subset=[card_column])
+            for _, row in subset.iterrows():
+                tarjeta = str(row[card_column]).strip()
+                if not tarjeta:
+                    continue
+
+                acertadas = True
+                for i, question_col in enumerate(last_3_questions, 1):
+                    respuesta = str(row.get(question_col, "")).lower()
+                    expected = expected_labels[i - 1]
+                    if expected not in respuesta:
+                        acertadas = False
+                        break
+                if acertadas and tarjeta not in tarjetas_acertadas:
+                    tarjetas_acertadas.append(tarjeta)
+
+        if tarjetas_acertadas:
+            tarjeta_ganadora = tarjetas_acertadas[0]
+            st.markdown(
+                f"**Enhorabuena!! Tarjeta {tarjeta_ganadora} por identificar 3/3 encuadres narrativos correctos!**"
+            )
+        
+    except Exception as e:
+        st.error(f"❌ Error al cargar los datos: {e}")
+        import traceback
+        with st.expander("Detalles del error"):
+            st.code(traceback.format_exc())
 
 
 def render_workshop_insights_page():
@@ -1411,6 +1603,8 @@ def render_workshop_insights_page():
         st.session_state["analysis_df_all"] = df_all
         st.session_state["analysis_df_normalized"] = df_normalized
         st.session_state["analysis_form0_context"] = form0_context_text
+        st.session_state["analysis_df_form0"] = df_form0
+        st.session_state["analysis_df_form1"] = df_form1
         
         st.success("✅ Datos cargados y preparados. Ahora puedes ejecutar los análisis generativos.")
 
@@ -1461,6 +1655,7 @@ def render_workshop_insights_page():
             data = analyze_general_json(df_all_cached, dominant_theme_cached, form0_context_cached)
             markdown_output = _format_general_json_to_markdown(data)
             st.markdown(markdown_output)
+            st.session_state["analysis_final_markdown"] = markdown_output
 
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------
@@ -1474,7 +1669,8 @@ ROUTES = {
     "Noticias del taller": render_news_flow_page,
     "Noticias 1, 2 y 3": render_news_comparison_page,
     "Explicacion del taller": render_explanation_page,                
-    "Análisis final del taller": render_workshop_insights_page,   
+    "Análisis final del taller": render_workshop_insights_page,
+    "Conclusión": render_conclusion_page,   
 }
 
 def main():
@@ -1678,6 +1874,73 @@ def main():
                         st.session_state.current_page = nav_ctx["next"]
                     st.rerun()
                 st.markdown('<div class="sidebar-arrow-caption">Siguiente</div>', unsafe_allow_html=True)
+            if current_page == "Conclusión":
+                workshop_date = st.session_state.get("selected_workshop_date", "Sin fecha asignada")
+                dominant_theme = st.session_state.get("dominant_theme", "Sin tema dominante")
+                neutral_news = st.session_state.get("neutral_news_text", "No se ha generado una noticia neutral.")
+                form0_df = st.session_state.get("analysis_df_form0")
+                form1_df = st.session_state.get("analysis_df_form1")
+                normalized_df = st.session_state.get("analysis_df_normalized")
+
+                def _df_section(title, df):
+                    if df is None or df.empty:
+                        return f"{title}\nSin datos disponibles."
+                    preview = df.head(20).astype(str)
+                    csv_content = preview.to_csv(index=False)
+                    return f"{title}\n{csv_content}"
+
+                analysis_json_f1 = st.session_state.get("analysis_json_f1")
+                analysis_text = (
+                    json.dumps(analysis_json_f1, ensure_ascii=False, indent=2)
+                    if analysis_json_f1
+                    else "Aún no se ha generado el análisis del tema dominante."
+                )
+
+                analysis_final_markdown = st.session_state.get(
+                    "analysis_final_markdown",
+                    "Aún no se ha generado el análisis textual final del taller."
+                )
+
+                generated_blocks = st.session_state.get("generated_news_blocks") or []
+
+                summary_parts = [
+                    "Taller de Integridad de la Información",
+                    f"Fecha del taller: {workshop_date}",
+                    f"Tema dominante: {dominant_theme}",
+                    "",
+                    _df_section("Tabla de respuestas Form 0", form0_df),
+                    "",
+                    _df_section("Tabla de respuestas Form 1", form1_df),
+                    "",
+                    "Texto de análisis de tema dominante:",
+                    analysis_text,
+                    "",
+                    "Noticia neutral base:",
+                    neutral_news,
+                ]
+
+                for idx, block in enumerate(generated_blocks, 1):
+                    summary_parts.append("")
+                    summary_parts.append(f"Noticia {idx} ({block.get('encuadre', 'sin encuadre')}):")
+                    summary_parts.append(block.get("text", "(sin contenido)"))
+
+                summary_parts.extend([
+                    "",
+                    _df_section("Tabla procesada (Form 1 + Form 2)", normalized_df),
+                    "",
+                    "Análisis textual final del taller:",
+                    analysis_final_markdown,
+                ])
+
+                summary_text = "\n\n".join(summary_parts)
+                st.download_button(
+                    "Descargate el Taller!",
+                    data=summary_text.encode("utf-8"),
+                    file_name="resumen_taller.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="download_taller_button",
+                )
         else:
             st.warning("Página actual fuera del flujo del taller.")
 

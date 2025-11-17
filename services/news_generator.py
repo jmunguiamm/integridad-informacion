@@ -178,7 +178,9 @@ Usa la repetición de palabras o frases: “Ya es tarde… demasiado tarde… �
         )
         result = resp.choices[0].message.content.strip()
         # Limpieza básica para eliminar encabezados tipo "1." o prefijos escapados
-        result = re.sub(r"^(?:\s|\\|/|[\d.\-)])+","", result)
+        result = re.sub(r"^(?:\s|\\|/|[\d.\-)])+", "", result)
+        # Eliminar marcadores tipo \1, \2 que son artefactos de la respuesta
+        result = re.sub(r"\\\d+", "", result)
         debug_flag = bool(st.session_state.get("debug_image_scoring"))
         image_path = select_image_for_story(
             dominant_theme,
