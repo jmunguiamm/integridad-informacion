@@ -12,7 +12,7 @@ import plotly.express as px
 
 # ---------- IMPORTS FROM MODULES ----------
 from config.secrets import read_secrets, forms_sheet_id
-from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet
+from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet, append_df_to_sheet
 from data.cleaning import normalize_form_data, filter_df_by_date
 from data.utils import get_date_column_name, normalize_date, get_available_workshop_dates, load_joined_responses
 from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
@@ -47,6 +47,7 @@ _forms_sheet_id = forms_sheet_id
 _get_gspread_client = get_gspread_client
 _sheet_to_df = sheet_to_df
 _write_df_to_sheet = write_df_to_sheet
+_append_df_to_sheet = append_df_to_sheet
 _get_date_column_name = get_date_column_name
 _normalize_date = normalize_date
 _get_available_workshop_dates = get_available_workshop_dates
@@ -1240,147 +1241,181 @@ def render_explanation_page():
 def render_conclusion_page():
     """Página de conclusión con gráficos de las últimas 3 preguntas de Form 2."""
     st.header("🎯 Conclusión")
-    
+
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM2_TAB = _read_secrets("FORM2_TAB", "")
     SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
     workshop_date = st.session_state.get("selected_workshop_date")
-    
+
     if not (FORMS_SHEET_ID and FORM2_TAB and SA):
         st.warning("⚠️ Configura las credenciales en 'Configuraciones' para ver los resultados.")
         return
-    
+
     if not workshop_date:
         st.warning("⚠️ Selecciona una fecha de taller en 'Configuraciones'.")
         return
-    
+
     try:
         with st.spinner("📥 Cargando datos de Form 2..."):
             df_form2 = _sheet_to_df(FORMS_SHEET_ID, FORM2_TAB)
-        
+
         if df_form2.empty:
             st.warning("⚠️ No hay datos en Form 2.")
             return
-        
+
         # Filtrar por fecha del taller
         df_form2 = _filter_df_by_date(df_form2, workshop_date)
-        
+
         if df_form2.empty:
             st.warning(f"⚠️ No hay datos de Form 2 para el taller del {workshop_date}.")
             return
-        
-        # Identificar columnas de metadata que debemos excluir
+
         metadata_cols = ["Marca temporal", "Ingresa el número asignado en la tarjeta que se te dio"]
-        # También buscar variaciones de estas columnas
         metadata_patterns = ["marca", "temporal", "tarjeta", "número", "numero", "number", "card"]
-        
-        # Filtrar columnas: excluir metadata y obtener solo las de preguntas
+
         question_cols = []
         for col in df_form2.columns:
             col_lower = col.lower().strip()
-            # Excluir si es metadata
             if any(pattern in col_lower for pattern in metadata_patterns):
                 continue
-            # Excluir si está en la lista exacta
             if col in metadata_cols:
                 continue
             question_cols.append(col)
-        
+
         if len(question_cols) < 3:
             st.warning(f"⚠️ Se encontraron menos de 3 preguntas en Form 2. Columnas encontradas: {len(question_cols)}")
             st.caption(f"Columnas detectadas: {', '.join(question_cols[:10])}")
             return
-        
-        # Obtener las últimas 3 preguntas
+
         last_3_questions = question_cols[-3:]
         card_column_candidates = [col for col in df_form2.columns if "tarjeta" in col.lower()]
         card_column = card_column_candidates[0] if card_column_candidates else None
-        
+
         st.success(f"✅ Datos cargados: {len(df_form2)} respuestas del taller del {workshop_date}")
         st.markdown(
             "Gracias por completar juntos este taller! A continuación tienes un pequeño análisis final de "
             "vuestras respuestas de los 3 encuadres narrativos. Veamos cuáles son las respuestas correctas."
         )
         st.markdown("---")
-        
+
         encuadre_correcto_map = {
             1: "encuadre 1",
             2: "encuadre 2",
             3: "encuadre 3",
         }
-        # Crear gráficos para cada una de las 3 preguntas
+
+        chart_columns = st.columns(3, gap="large")
+        summary_details = []
+
         for idx, question_col in enumerate(last_3_questions, 1):
-            st.subheader(f"Encuadre de noticia {idx}")
-            st.caption(question_col)
-            
-            # Obtener respuestas válidas (excluir NaN y vacíos)
-            responses = df_form2[question_col].dropna()
-            responses = responses[responses.astype(str).str.strip() != ""]
-            
-            if responses.empty:
-                st.info("No hay respuestas para esta pregunta.")
-                st.markdown("---")
-                continue
-            
-            # Contar respuestas
-            value_counts = responses.value_counts()
-            total = len(responses)
-            
-            # Calcular porcentajes
-            percentages = (value_counts / total * 100).round(1)
-            
-            # Crear DataFrame para el gráfico
-            chart_data = pd.DataFrame({
-                "Opción": value_counts.index,
-                "Cantidad": value_counts.values,
-                "Porcentaje": percentages.values
-            })
-            
-            # Ordenar por cantidad (descendente)
-            chart_data = chart_data.sort_values("Cantidad", ascending=False)
-            
-            # Mostrar métricas
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total de respuestas", total)
-            with col2:
-                st.metric("Opciones distintas", len(value_counts))
-            
-            # Crear gráfico de barras horizontal con porcentajes
-            correct_label = encuadre_correcto_map.get(idx, "")
-            chart_data["Es correcta"] = chart_data["Opción"].astype(str).str.lower().apply(
-                lambda option: correct_label in option if correct_label else False
-            )
-            fig = px.bar(
-                chart_data,
-                x="Porcentaje",
-                y="Opción",
-                orientation='h',
-                text="Porcentaje",
-                labels={"Porcentaje": "Porcentaje (%)", "Opción": "Opción seleccionada"},
-                title=f"Distribución de respuestas - Encuadre de noticia {idx}",
-                color="Es correcta",
-                color_discrete_map={True: "#2ecc71", False: "#7f7f7f"},
-            )
-            fig.update_traces(texttemplate='%{text}%', textposition='outside')
-            fig.update_layout(
-                height=400,
-                xaxis_title="Porcentaje (%)",
-                yaxis_title="",
-                showlegend=False,
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Mostrar tabla detallada
-            with st.expander(f"📊 Ver detalles de la Pregunta {idx}"):
-                st.dataframe(
-                    chart_data[["Opción", "Cantidad", "Porcentaje"]].style.format({"Porcentaje": "{:.1f}%"}), 
-                    use_container_width=True,
-                    hide_index=True
+            column = chart_columns[idx - 1]
+            with column:
+                st.subheader(f"Noticia {idx}")
+                st.caption(question_col)
+
+                responses = df_form2[question_col].dropna()
+                responses = responses.astype(str).str.strip()
+                responses = responses[responses != ""]
+
+                if responses.empty:
+                    st.info("No hay respuestas para esta pregunta.")
+                    summary_details.append(
+                        {"idx": idx, "percentage": 0.0, "correct_label": encuadre_correcto_map.get(idx, "encuadre")}
+                    )
+                    continue
+
+                value_counts = responses.value_counts()
+                total = len(responses)
+
+                expected_labels = [
+                    encuadre_correcto_map.get(i, "") for i in range(1, 4)
+                    if encuadre_correcto_map.get(i, "")
+                ]
+                all_options = list(dict.fromkeys(list(value_counts.index) + expected_labels))
+
+                chart_data_rows = []
+                for option in all_options:
+                    count = int(value_counts.get(option, 0))
+                    percentage = round((count / total * 100), 1) if total else 0.0
+                    chart_data_rows.append({
+                        "Opción": option,
+                        "Cantidad": count,
+                        "Porcentaje": percentage
+                    })
+
+                chart_data = pd.DataFrame(chart_data_rows)
+                metric_cols = column.columns(2)
+                metric_cols[0].metric("Total de respuestas", total)
+                metric_cols[1].metric("Opciones distintas", len(all_options))
+
+                correct_label = encuadre_correcto_map.get(idx, "")
+                chart_data["Es correcta"] = chart_data["Opción"].astype(str).str.lower().apply(
+                    lambda option: correct_label in option if correct_label else False
                 )
-            
-            st.markdown("---")
+
+                fig = px.bar(
+                    chart_data,
+                    x="Opción",
+                    y="Porcentaje",
+                    text="Porcentaje",
+                    labels={"Porcentaje": "Porcentaje (%)", "Opción": "Opción seleccionada"},
+                    color="Es correcta",
+                    color_discrete_map={True: "#2ecc71", False: "#7f7f7f"},
+                    title=f"Encuadre de noticia {idx}",
+                )
+                fig.update_traces(texttemplate='%{text}%', textposition='outside', marker_line_width=0)
+                fig.update_layout(
+                    height=420,
+                    xaxis_title="Opciones",
+                    yaxis_title="Porcentaje (%)",
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=50, b=20)
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                correct_match = chart_data[
+                    chart_data["Opción"].astype(str).str.lower().str.contains(correct_label)
+                ]
+                if not correct_match.empty:
+                    correct_pct = float(correct_match["Porcentaje"].iloc[0])
+                    option_label = correct_match["Opción"].iloc[0]
+                else:
+                    correct_pct = 0.0
+                    option_label = correct_label
+
+                summary_details.append({
+                    "idx": idx,
+                    "percentage": correct_pct,
+                    "correct_label": correct_label or option_label,
+                    "option_label": option_label,
+                })
+
+        summary_lines = []
+        for info in summary_details:
+            percentage_label = f"{info['percentage']:.1f}%"
+            summary_lines.append(
+                f"Noticia {info['idx']} : {percentage_label} : la respuesta correcta era {info['correct_label']}"
+            )
+
+        st.markdown("<br>".join(summary_lines), unsafe_allow_html=True)
+        st.markdown("---")
+        st.subheader("Preguntas Generativa Fija")
+        st.caption("Gap filler para cerrar el taller")
+
+        with st.container():
+            st.subheader("Lista de recomendaciones para actuar")
+            st.text_area("Recomendaciones", "Escribe aquí los copies o acciones sugeridas 😊", height=200)
+
+        download_url = _read_secrets("WORKSHOP_SUMMARY_PDF_URL", "")
+        if download_url:
+            qr_image = _qr_image_for(download_url)
+            st.markdown("### 📥 Descarga el taller en PDF")
+            if qr_image:
+                st.image(qr_image, width=200, caption="Escanea para descargar el resumen en PDF")
+            st.markdown(f"[Sigue este enlace directo si prefieres descargar manualmente]({download_url})")
+        else:
+            st.info("Define `WORKSHOP_SUMMARY_PDF_URL` en secrets para activar el QR de descarga.")
 
         tarjetas_acertadas = []
         if card_column:
@@ -1406,7 +1441,7 @@ def render_conclusion_page():
             st.markdown(
                 f"**Enhorabuena!! Tarjeta {tarjeta_ganadora} por identificar 3/3 encuadres narrativos correctos!**"
             )
-        
+
     except Exception as e:
         st.error(f"❌ Error al cargar los datos: {e}")
         import traceback
@@ -1451,21 +1486,36 @@ def render_workshop_insights_page():
                 st.warning("⚠️ No se encontraron datos para normalizar. Verifica columnas o estructura.")
                 return
 
-            with st.spinner("📤 Guardando datos centralizados en Google Sheets..."):
+            with st.spinner("📤 Actualizando datos centralizados en Google Sheets..."):
                 _write_df_to_sheet(
                     FORMS_SHEET_ID,
                     "Datos Centralizados Form2",
                     df_normalized,
-                    clear_existing=True
+                    clear_existing=True,
+                )
+                appended = _append_df_to_sheet(
+                    FORMS_SHEET_ID,
+                    "Datos centralizados",
+                    df_normalized,
                 )
 
             _log_debug_message(
                 "Datos centralizados actualizados en Google Sheets.",
                 level="success",
                 context="Preparación de análisis final",
-                data={"filas": int(len(df_normalized))},
+                data={
+                    "filas": int(len(df_normalized)),
+                    "tablas": ["Datos Centralizados Form2", "Datos centralizados"],
+                },
             )
-            st.caption("Datos centralizados actualizados. Revisa el dashboard para validar la carga.")
+            st.caption(
+                "Se actualizó 'Datos Centralizados Form2' y se anexaron filas nuevas (si las hubo) en 'Datos centralizados'."
+            )
+
+            if not appended:
+                st.warning(
+                    "No se generaron filas nuevas para anexar en 'Datos centralizados'."
+                )
         except Exception as e:
             st.error(f"❌ Error procesando datos: {e}")
             import traceback

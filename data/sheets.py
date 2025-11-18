@@ -80,3 +80,49 @@ def write_df_to_sheet(sheet_id: str, tab_name: str, df: pd.DataFrame, clear_exis
     except Exception as e:
         raise Exception(f"Error escribiendo a Google Sheets: {e}")
 
+
+def append_df_to_sheet(sheet_id: str, tab_name: str, df: pd.DataFrame):
+    """
+    Añade filas de un DataFrame a un tab existente sin limpiar lo que ya hay.
+    Si el tab no existe, se crea y se escribe el encabezado.
+    """
+    import gspread
+
+    if df is None or not isinstance(df, pd.DataFrame):
+        raise ValueError("Se requiere un DataFrame válido para anexar.")
+
+    if df.empty:
+        return False
+
+    df_clean = df.replace([float('inf'), float('-inf')], None).fillna("")
+    rows = df_clean.astype(str).values.tolist()
+    if not rows:
+        return False
+
+    try:
+        gc = get_gspread_client()
+        sh = gc.open_by_key(sheet_id)
+        try:
+            worksheet = sh.worksheet(tab_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = sh.add_worksheet(title=tab_name, rows=max(1000, len(rows) + 5), cols=max(20, len(df_clean.columns)))
+
+        existing_values = worksheet.get_all_values()
+
+        to_append = []
+        if not existing_values:
+            to_append.append(df_clean.columns.tolist())
+            start_row = 1
+        else:
+            start_row = len(existing_values) + 1
+
+        to_append.extend(rows)
+
+        required_rows = start_row + len(to_append) - 1
+        if worksheet.row_count < required_rows:
+            worksheet.add_rows(required_rows - worksheet.row_count)
+
+        worksheet.update(f"A{start_row}", to_append, value_input_option='RAW')
+        return True
+    except Exception as e:
+        raise Exception(f"Error anexando datos a Google Sheets: {e}")
