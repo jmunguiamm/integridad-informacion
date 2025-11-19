@@ -870,6 +870,7 @@ def render_neutral_news_page():
     
     fecha_implementacion = None
     municipio = None
+    estado = None
     
     if FORMS_SHEET_ID and FORM0_TAB and SA and workshop_date:
         try:
@@ -884,6 +885,9 @@ def render_neutral_news_page():
                         fecha_implementacion = df0[fecha_cols[0]].iloc[0] if pd.notna(df0[fecha_cols[0]].iloc[0]) else None
                     if municipio_cols:
                         municipio = df0[municipio_cols[0]].iloc[0] if pd.notna(df0[municipio_cols[0]].iloc[0]) else None
+                    estado_cols = [col for col in df0.columns if 'estado' in col.lower()]
+                    if estado_cols:
+                        estado = df0[estado_cols[0]].iloc[0] if pd.notna(df0[estado_cols[0]].iloc[0]) else None
         except Exception as e:
             st.caption(f"Nota: No se pudieron cargar datos del Form 0 para contexto adicional: {e}")
 
@@ -892,39 +896,10 @@ def render_neutral_news_page():
         st.caption(f"Contextualizas esta noticia para el taller del {workshop_date}.")
     if municipio:
         st.caption(f"📍 Municipio: {municipio}")
+    if estado:
+        st.caption(f"🗺️ Estado: {estado}")
     if fecha_implementacion:
         st.caption(f"📅 Fecha de implementación: {fecha_implementacion}")
-
-    import streamlit.components.v1 as components
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%;
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ0HN5LTFvxYBD3Nif-gin4m9ljOLr_u5Q5w_k4HiffpsySnqCjrRzQpVTKyNMeTS_RmKHsfI4eQ2gq/pubembed?start=false&loop=false&delayms=3000"
-                    allowfullscreen="true"
-                    mozallowfullscreen="true"
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,
-    )
 
     neutral_news = st.session_state.get("neutral_news_text")
     if neutral_news:
@@ -940,10 +915,12 @@ def render_neutral_news_page():
             contexto_fecha = f"- El hecho debe haber ocurrido alrededor de la fecha de implementación del taller: {fecha_implementacion}."
         
         # Construir contexto de ubicación de forma flexible
-        if municipio:
-            contexto_ubicacion = f"el municipio de {municipio}"
+        if municipio and estado:
+            contexto_ubicacion = f"el municipio de {municipio}, {estado}"
         elif municipio:
-            contexto_ubicacion = f"el municipio de {municipio}" 
+            contexto_ubicacion = f"el municipio de {municipio}"
+        elif estado:
+            contexto_ubicacion = f"el estado de {estado}"
         else:
             contexto_ubicacion = "la región correspondiente"
         
@@ -1291,11 +1268,11 @@ def render_conclusion_page():
         card_column_candidates = [col for col in df_form2.columns if "tarjeta" in col.lower()]
         card_column = card_column_candidates[0] if card_column_candidates else None
 
-        st.success(f"✅ Datos cargados: {len(df_form2)} respuestas del taller del {workshop_date}")
         st.markdown(
             "Gracias por completar juntos este taller! A continuación tienes un pequeño análisis final de "
             "vuestras respuestas de los 3 encuadres narrativos. Veamos cuáles son las respuestas correctas."
         )
+        st.success(f"✅ Datos cargados: {len(df_form2)} respuestas del taller del {workshop_date}")
         st.markdown("---")
 
         encuadre_correcto_map = {
@@ -1326,27 +1303,11 @@ def render_conclusion_page():
 
                 value_counts = responses.value_counts()
                 total = len(responses)
-
-                expected_labels = [
-                    encuadre_correcto_map.get(i, "") for i in range(1, 4)
-                    if encuadre_correcto_map.get(i, "")
-                ]
-                all_options = list(dict.fromkeys(list(value_counts.index) + expected_labels))
-
-                chart_data_rows = []
-                for option in all_options:
-                    count = int(value_counts.get(option, 0))
-                    percentage = round((count / total * 100), 1) if total else 0.0
-                    chart_data_rows.append({
-                        "Opción": option,
-                        "Cantidad": count,
-                        "Porcentaje": percentage
-                    })
-
-                chart_data = pd.DataFrame(chart_data_rows)
-                metric_cols = column.columns(2)
-                metric_cols[0].metric("Total de respuestas", total)
-                metric_cols[1].metric("Opciones distintas", len(all_options))
+                chart_data = pd.DataFrame({
+                    "Opción": value_counts.index,
+                    "Cantidad": value_counts.values,
+                    "Porcentaje": (value_counts / total * 100).round(1)
+                })
 
                 correct_label = encuadre_correcto_map.get(idx, "")
                 chart_data["Es correcta"] = chart_data["Opción"].astype(str).str.lower().apply(
@@ -1366,7 +1327,7 @@ def render_conclusion_page():
                 fig.update_traces(texttemplate='%{text}%', textposition='outside', marker_line_width=0)
                 fig.update_layout(
                     height=420,
-                    xaxis_title="Opciones",
+                    xaxis_title="",
                     yaxis_title="Porcentaje (%)",
                     showlegend=False,
                     margin=dict(l=20, r=20, t=50, b=20)
@@ -1407,15 +1368,35 @@ def render_conclusion_page():
             st.subheader("Lista de recomendaciones para actuar")
             st.text_area("Recomendaciones", "Escribe aquí los copies o acciones sugeridas 😊", height=200)
 
-        download_url = _read_secrets("WORKSHOP_SUMMARY_PDF_URL", "")
-        if download_url:
-            qr_image = _qr_image_for(download_url)
-            st.markdown("### 📥 Descarga el taller en PDF")
-            if qr_image:
-                st.image(qr_image, width=200, caption="Escanea para descargar el resumen en PDF")
-            st.markdown(f"[Sigue este enlace directo si prefieres descargar manualmente]({download_url})")
-        else:
-            st.info("Define `WORKSHOP_SUMMARY_PDF_URL` en secrets para activar el QR de descarga.")
+        material_assets = [
+            {
+                "label": "Resumen completo del taller",
+                "file": "material/resumen_taller.pdf",
+            },
+            {
+                "label": "Guía complementaria breve",
+                "file": "material/guia_complementaria.pdf",
+            },
+        ]
+        st.markdown("---")
+        st.subheader("Descarga el taller en PDF")
+        cols_qr = st.columns(len(material_assets))
+        for col, asset in zip(cols_qr, material_assets):
+            asset_url = (
+                "https://raw.githubusercontent.com/"
+                "MottumData/streamlit-information-integrity-workshop/main/"
+                f"{asset['file']}"
+            )
+            qr_image = _qr_image_for(asset_url)
+            with col:
+                st.caption(asset["label"])
+                if qr_image:
+                    st.image(
+                        qr_image,
+                        width=200,
+                        caption=f"Escanea para descargar {asset['label']}",
+                    )
+                st.markdown(f"[Descargar {asset['label']}]({asset_url})")
 
         tarjetas_acertadas = []
         if card_column:

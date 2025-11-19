@@ -188,6 +188,8 @@ def select_image_for_story(
     folder: str = "images",
     exclude_paths: Optional[Iterable[str]] = None,
     debug: bool = False,
+    fallback_path: Optional[str] = None,
+    fallback_score_threshold: float = 6.0,
 ) -> Optional[str]:
     catalog = _load_image_catalog()
     theme = (theme or "").lower()
@@ -233,11 +235,21 @@ def select_image_for_story(
                 best_score = score
                 best_path = candidate_path
 
+    fallback_used = False
     selected_path = best_path
+    fallback_path_valid = bool(fallback_path and os.path.isfile(fallback_path))
+
+    if selected_path and fallback_path_valid:
+        if math.isfinite(best_score) and best_score < fallback_score_threshold:
+            selected_path = fallback_path
+            fallback_used = True
 
     if not selected_path:
         matches = [path for path in get_images_for_dominant_theme(theme, folder) if path not in exclude]
         selected_path = matches[0] if matches else None
+        if not selected_path and fallback_path_valid:
+            selected_path = fallback_path
+            fallback_used = True
 
     if debug:
         if no_catalog_reason and not debug_entries:
@@ -261,7 +273,7 @@ def select_image_for_story(
                 "candidates": debug_entries or "Sin candidatos válidos",
                 "selected": selected_path,
                 "best_score": best_score_value,
-                "used_fallback": bool(selected_path) and selected_path != best_path,
+                "used_fallback": fallback_used,
             }
         )
         st.session_state["image_scoring_debug"] = debug_log[-200:]

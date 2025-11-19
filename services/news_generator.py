@@ -163,6 +163,11 @@ Usa la repetición de palabras o frases: “Ya es tarde… demasiado tarde… �
     ]
 
     generated_blocks = []
+    fallback_images = [
+        os.path.join("images", "fallback_1.jpg"),
+        os.path.join("images", "fallback_2.jpg"),
+        os.path.join("images", "fallback_3.png"),
+    ]
     used_images: set[str] = set()
     for idx, (encuadre, prompt_text) in enumerate(prompts, start=1):
         resp = client.chat.completions.create(
@@ -182,12 +187,15 @@ Usa la repetición de palabras o frases: “Ya es tarde… demasiado tarde… �
         # Eliminar marcadores tipo \1, \2 que son artefactos de la respuesta
         result = re.sub(r"\\\d+", "", result)
         debug_flag = bool(st.session_state.get("debug_image_scoring"))
+        fallback_path = fallback_images[idx - 1] if idx - 1 < len(fallback_images) else None
         image_path = select_image_for_story(
             dominant_theme,
             result,
             encuadre,
             exclude_paths=used_images,
             debug=debug_flag,
+            fallback_path=fallback_path,
+            fallback_score_threshold=7.5,
         )
         if image_path:
             used_images.add(image_path)
