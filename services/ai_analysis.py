@@ -247,21 +247,32 @@ import streamlit as st
 from .ai_analysis import get_openai_client
 
 
+def _get_generated_news_text() -> str:
+    raw = st.session_state.get("generated_news_raw")
+    if raw:
+        return raw
+    return "(no hay noticias generadas)"
+
+
 def analyze_emotions_json(df_all, dominant_theme: str, form0_context_text: str):
     """Analiza variaciones emocionales por encuadre dentro de cada taller."""
     client = get_openai_client()
     sample = df_all.head(200).to_dict(orient="records")
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
+    news_block_txt = _get_generated_news_text()
+
     prompt = f"""
-Eres un analista en ciencia de datos que trabaja con talleres sobre integridad de la información.
-
 Contexto:
-Se han generado tres noticias distintas sobre un mismo evento, cada una con un encuadre narrativo distinto.
-Los participantes respondieron un formulario indicando las emociones, nivel de confianza y elementos que llamaron su atención.
+Dentro del taller de integridad de la información se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. 
+Los participantes completaron un formulario indicando, para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y (c) elementos clave que llamaron su atención.
+Rol:
+Eres un analista en ciencia de datos que trabaja con los datos para generar preguntas que provoquen una conversación en torno a las emociones y los encuadres narrativos.
 
-Tema dominante: "{dominant_theme}"
-Contexto Form 0: "{(form0_context_text or '').strip()}"
+Insumos clave del taller:
+- Tema dominante (derivado del análisis previo): "{dominant_theme}"
+- Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+- Noticias generadas (encuadre + texto): {news_block_txt}
 - Tipos de encuadre narrativo: 
 - Encuadres narrativos: "Encuadre de desconfianza y responsabilización de actores:
     Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
@@ -277,41 +288,37 @@ Contexto Form 0: "{(form0_context_text or '').strip()}"
 🎯 Objetivo:
 Identificar cómo las **emociones** varían según el encuadre narrativo dentro de cada taller.
 
-🧩 Tareas:
-2️⃣ Analiza variaciones de emociones y confianza percibida.
-3️⃣ Resume hallazgos principales (no inventes información ausente).
-4️⃣ Genera **dos preguntas de debate** (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos sobre las emociones presentadas en cada encuadre.
-
-Ejemplo: 
--¿Por qué crees que el encuadre de desconfianza institucional genera más emociones de desaprobación que el de miedo y control? 
-- ¿Cómo influyeron los diferentes encuadres en la percepción emocional del grupo?
--¿Cómo influyeron los diferentes encuadres en la percepción emocional del grupo?
-
+Metodología de análisis requerida:
+1)Une las respuestas completas de cada persona relacionando los resultados de los formularios a través del código personal que permite identificar todas las respuestas de una misma persona.
+2)Identifica cómo las emociones varían según el encuadre.
+3)Genera dos preguntas  (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos sobre las emociones presentadas en cada encuadre.Ejemplos: ¿Cómo influyeron los diferentes encuadres en la percepción emocional del grupo?
 
 Reglas:
 - Usa únicamente información derivada de los datos provistos (no inventes).
 - Tono analítico y educativo, claro y sintético.
 - Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
-- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
+    - No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
 
----
+    ---
 
-📄 Formato JSON:
-{{
-  "workshops": [
+    📄 Formato JSON:
     {{
-      "taller": "<nombre o código>",
-      "emociones_por_encuadre": {{
-        "Desconfianza y responsabilización de actores": ["emocion1", "emocion2"],
-        "Polarización social y exclusión": ["emocion1", "emocion2"],
-        "Miedo y control": ["emocion1", "emocion2"]
-      }},
-      "resumen": "<síntesis breve del patrón emocional (2–3 frases)>",
-      "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
+      "workshops": [
+        {{
+          "taller": "<nombre o código>",
+          "emociones_por_encuadre": {{
+            "Desconfianza y responsabilización de actores": ["emocion1", "emocion2"],
+            "Polarización social y exclusión": ["emocion1", "emocion2"],
+            "Miedo y control": ["emocion1", "emocion2"]
+          }},
+          "resumen": "<síntesis breve del patrón emocional (2–3 frases)>",
+          "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
+        }}
+      ]
     }}
-  ]
-}}
-"""
+
+    Devuelve únicamente el JSON anterior sin texto adicional.
+    """
 
     with st.spinner("Analizando emociones por encuadre..."):
         resp = client.chat.completions.create(
@@ -322,7 +329,13 @@ Reglas:
         )
 
     text = resp.choices[0].message.content.strip()
-    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        raise ValueError(
+            "No se pudo extraer JSON del análisis de emociones. Respuesta del modelo:\n"
+            f"{text[:400]}..."
+        )
+    data = json.loads(match.group(0))
     return data
 
 
@@ -332,9 +345,15 @@ def analyze_gender_impacts_json(df_all, dominant_theme: str, form0_context_text:
     sample = df_all.head(200).to_dict(orient="records")
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
+    news_block_txt = _get_generated_news_text()
+
     prompt = f"""
+Contexto:
+Dentro del taller de integridad de la información se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. 
+Los participantes completaron un formulario indicando, para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y (c) elementos clave que llamaron su atención.
+
 Rol:
-Eres un analista en ciencia de datos que explora impactos interseccionales en talleres de integridad de la información.
+Eres un analista en ciencia de datos que trabaja con los datos para generar análisis interseccionales sobre la integridad de la información y el impacto diferenciado en el género
 
 Insumos clave del taller:
 - Tema dominante: "{dominant_theme}"
@@ -350,40 +369,40 @@ Insumos clave del taller:
 {sample_txt}
 
 ---
-Tareas:
-Identifica los patrones y hallazgos relevantes de las respuestas e identifica contrastes significativos.
-Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables del género con los encuadres narrativos y niveles de confianza.
-En no más de dos párrafos de 4 líneas describe los hallazgos principales de estos cruces. Ejemplo: “Las mujeres mostraron una mayor sensibilidad emocional  a la noticia con el encuadre de polarización y su nivel de confianza en la credibilidad de la noticia fue mayor que los otros géneros, mientras que los hombres tendieron a reaccionar más y confiar más en las noticias con los mensajes del encuadre de responsabilización institucional.”
-Genera dos preguntas (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos. 
-
-Ejemplos de preguntas de discusión: 
--¿Qué relación podría haber entre el género y la percepción del las emociones? 
--¿Cómo podrían influir estas diferencias en la forma en la que reaccionamos a las noticias?
--¿Qué rol juegan las emociones en el nivel de confianza que se le otorgó a los difenrentes encuadres? 
-
-📄 Formato JSON:
-{{
-  "analisis_genero": [
-    {{
-      "taller": "<código>",
-      "patrones_por_genero": {{
-        "Femenino": "<síntesis de emociones y confianza>",
-        "Masculino": "<síntesis de emociones y confianza>",
-        "Otro/No binario": "<síntesis si aplica>"
-      }},
-      "hallazgos_transversales": "<resumen general de diferencias detectadas>",
-      "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
-    }}
-  ]
-}}
+Metodología de análisis requerida:
+2) Une las respuestas completas de cada persona relacionando los resultados de los formularios a través del código personal que permite identificar todas las respuestas de una misma persona.
+3)Identifica los patrones y hallazgos relevantes de las respuestas e identifica contrastes significativos.
+5) Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables del género con los encuadres narrativos y niveles de confianza.
+6) En no más de dos párrafos de 4 líneas describe los hallazgos principales de estos cruces. Ejemplo: “Las mujeres mostraron una mayor sensibilidad emocional  a la noticia con el encuadre de polarización y su nivel de confianza en la credibilidad de la noticia fue mayor que los otros géneros, mientras que los hombres tendieron a reaccionar más y confiar más en las noticias con los mensajes del encuadre de responsabilización institucional.”
+7) Genera dos preguntas (hasta 20 palabras) que permitan al grupo discutir sobre los hallazgos. Ejemplo: ¿Qué relación podría haber entre el género y la percepción del las emociones? ¿Cómo podrían influir estas diferencias en la forma en la que reaccionamos a las noticias?¿Qué rol juegan las emociones en el nivel de confianza que se le otorgó a los difenrentes encuadres? 
 ---
 
  Reglas:
 - Usa únicamente información derivada de los datos provistos (no inventes).
 - Tono analítico y educativo, claro y sintético.
 - Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
-- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
-"""
+    - No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
+
+    ---
+
+    📄 Formato JSON:
+    {{
+      "analisis_genero": [
+        {{
+          "taller": "<código>",
+          "patrones_por_genero": {{
+            "Femenino": "<síntesis de emociones y confianza>",
+            "Masculino": "<síntesis de emociones y confianza>",
+            "Otro/No binario": "<síntesis si aplica>"
+          }},
+          "hallazgos_transversales": "<resumen general de diferencias detectadas>",
+          "preguntas_discusion": ["<pregunta 1>", "<pregunta 2>"]
+        }}
+      ]
+    }}
+
+    Devuelve únicamente el JSON anterior sin texto adicional.
+    """
 
     with st.spinner("Analizando impactos diferenciados por género..."):
         resp = client.chat.completions.create(
@@ -394,7 +413,13 @@ Ejemplos de preguntas de discusión:
         )
 
     text = resp.choices[0].message.content.strip()
-    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        raise ValueError(
+            "No se pudo extraer JSON del análisis de género. Respuesta del modelo:\n"
+            f"{text[:400]}..."
+        )
+    data = json.loads(match.group(0))
     return data
 
 
@@ -403,6 +428,8 @@ def analyze_general_json(df_all, dominant_theme: str, form0_context_text: str):
     client = get_openai_client()
     sample = df_all.head(200).to_dict(orient="records")
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
+
+    news_block_txt = _get_generated_news_text()
 
     prompt = f"""
 Contexto:
@@ -415,6 +442,7 @@ Eres un analista en ciencia de datos que trabaja con los datos para generar aná
 Insumos clave del taller:
 - Tema dominante (derivado del análisis previo): "{dominant_theme}"
 - Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+- Noticias generadas (encuadre + texto): {news_block_txt}
 - Tipos de encuadre narrativo: 
 Encuadre de desconfianza y responsabilización de actores:
 Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
@@ -432,30 +460,36 @@ Datos de entrada:
 🎯 Objetivo:
 Detectar patrones transversales entre emociones, confianza, encuadres y sesgos cognitivos percibidos.
 
-🧩 Tareas:
-- Identifica los patrones y hallazgos relevantes de las respuestas y compara entre sí emergen contrastes significativos.
-- Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables de los formularios, y la información de los tipos de encuadres y  los tipos de sesgos cognitivos.
-- En función de las respuestas identifica algunos sesgos que puedan estar asociados. 
-- En no más de dos párrafos de 4 líneas describe los hallazgos principales y las conclusiones de los hallazgos.
+Metodología de análisis requerida:
+2) Une las respuestas completas de cada persona relacionando los resultados de los formularios a través del código personal que permite identificar todas las respuestas de una misma persona.
+3)Identifica los patrones y hallazgos relevantes de las respuestas y compara entre sí emergen contrastes significativos.
+5) Destaca patrones transversales y correlaciones latentes que surjan al cruzar las variables de los formularios, y la información de los tipos de encuadres y  los tipos de sesgos cognitivos.
+6) En función de las respuestas identifica algunos sesgos que puedan estar asociados. 
+7)En no más de dos párrafos de 4 líneas describe los hallazgos principales y las conclusiones de los hallazgos.
 
-📄 Formato JSON:
-{{
-  "resumen_general": {{
-    "patrones_transversales": "<síntesis en 3–5 oraciones>",
-    "sesgos_identificados": ["<sesgo1>", "<sesgo2>"],
-    "hallazgos_clave": "<resumen de 4 líneas>"
-  }}
-}}
 ---
 Reglas:
 - Usa únicamente información derivada de los datos provistos (no inventes).
 - Tono analítico y educativo, claro y sintético.
 - Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
 - No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
-- Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
-- Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
-- Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
-"""
+    - Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
+    - Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
+    - Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
+
+    ---
+
+    📄 Formato JSON:
+    {{
+      "resumen_general": {{
+        "patrones_transversales": "<síntesis en 3–5 oraciones>",
+        "sesgos_identificados": ["<sesgo1>", "<sesgo2>"],
+        "hallazgos_clave": "<resumen de 4 líneas>"
+      }}
+    }}
+
+    Devuelve únicamente el JSON anterior sin texto adicional.
+    """
 
     with st.spinner("Generando análisis general del taller..."):
         resp = client.chat.completions.create(
@@ -466,5 +500,11 @@ Reglas:
         )
 
     text = resp.choices[0].message.content.strip()
-    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        raise ValueError(
+            "No se pudo extraer JSON del análisis general. Respuesta del modelo:\n"
+            f"{text[:400]}..."
+        )
+    data = json.loads(match.group(0))
     return data

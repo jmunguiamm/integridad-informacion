@@ -152,7 +152,7 @@ def typing_then_bubble(
     
     try:
         import streamlit.components.v1 as components
-        estimated_height = 900 if img_html else 550
+        estimated_height = 1150 if img_html else 700
         components.html(html_block, height=estimated_height)
     except Exception:
         st.markdown(html_block, unsafe_allow_html=True)

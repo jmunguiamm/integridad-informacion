@@ -369,59 +369,6 @@ def render_setup_trainer_page():
         st.info("⚠️ Configura las credenciales para seleccionar un taller.")
         st.session_state.selected_workshop_date = None
 
-    st.markdown("---")
-    st.subheader("🛠️ Debug messages")
-    debug_active = st.checkbox(
-        "Activar y mostrar registros técnicos",
-        value=bool(st.session_state.get("debug_image_scoring")),
-        help="Incluye puntajes de imágenes y mensajes automáticos sobre la ejecución del taller.",
-    )
-    st.session_state["debug_image_scoring"] = debug_active
-
-    if debug_active:
-        col_hint, col_clear = st.columns([4, 1])
-        with col_hint:
-            st.caption("Revisa aquí los eventos internos. Los registros se conservan solo durante la sesión actual.")
-        with col_clear:
-            if st.button("Limpiar registros", key="clear_debug_logs"):
-                st.session_state["image_scoring_debug"] = []
-                st.session_state["workflow_debug_messages"] = []
-                st.caption("Registros limpiados.")
-
-        workflow_logs = st.session_state.get("workflow_debug_messages") or []
-        if workflow_logs:
-            st.markdown("**Mensajes del flujo del taller**")
-            for idx, entry in enumerate(reversed(workflow_logs), start=1):
-                title = f"[{entry.get('timestamp')}] {entry.get('context') or 'Sin contexto'} — {entry.get('level', 'info').upper()}"
-                with st.expander(title, expanded=False):
-                    st.markdown(entry.get("message", ""))
-                    data = entry.get("data")
-                    if data:
-                        st.json(data)
-        else:
-            st.caption("Sin mensajes registrados del flujo.")
-
-        image_entries = st.session_state.get("image_scoring_debug") or []
-        if image_entries:
-            st.markdown("**Selección de imágenes**")
-            for idx, entry in enumerate(reversed(image_entries), start=1):
-                title = f"Intento #{len(image_entries) - idx + 1} — {entry.get('encuadre') or 'Sin encuadre'}"
-                with st.expander(title, expanded=False):
-                    st.markdown(f"**Tema:** {entry.get('theme') or 'N/A'}")
-                    st.markdown(f"**Seleccionada:** `{entry.get('selected') or 'Sin coincidencia'}`")
-                    best = entry.get("best_score")
-                    st.markdown(f"**Puntaje máximo:** {best if best is not None else 'N/D'}")
-                    st.markdown(f"**Usó fallback:** {'Sí' if entry.get('used_fallback') else 'No'}")
-                    candidates = entry.get("candidates")
-                    if isinstance(candidates, list):
-                        st.markdown("**Candidatos evaluados:**")
-                        st.json(candidates)
-                    else:
-                        st.markdown(f"**Detalle:** {candidates}")
-        else:
-            st.caption("Sin registros de selección de imágenes.")
-
-
 def render_introduction_page():
     """🌎 Página de introducción con presentación compacta."""
     import streamlit as st
@@ -1247,24 +1194,54 @@ def render_conclusion_page():
             st.warning(f"⚠️ No hay datos de Form 2 para el taller del {workshop_date}.")
             return
 
-        metadata_cols = ["Marca temporal", "Ingresa el número asignado en la tarjeta que se te dio"]
-        metadata_patterns = ["marca", "temporal", "tarjeta", "número", "numero", "number", "card"]
+        # Buscamos las columnas específicas de las tres últimas preguntas por encuadre.
+        expected_question_labels = [
+            "Cual crees que sea el encuadre usado en la noticia 1?",
+            "Cual crees que sea el encuadre usado en la noticia 2?",
+            "Cual crees que sea el encuadre usado en la noticia 3?",
+        ]
 
+        normalized_columns = {col.lower().strip(): col for col in df_form2.columns}
         question_cols = []
-        for col in df_form2.columns:
-            col_lower = col.lower().strip()
-            if any(pattern in col_lower for pattern in metadata_patterns):
-                continue
-            if col in metadata_cols:
-                continue
-            question_cols.append(col)
+        for label in expected_question_labels:
+            match = normalized_columns.get(label.lower().strip())
+            if match:
+                question_cols.append(match)
 
-        if len(question_cols) < 3:
-            st.warning(f"⚠️ Se encontraron menos de 3 preguntas en Form 2. Columnas encontradas: {len(question_cols)}")
-            st.caption(f"Columnas detectadas: {', '.join(question_cols[:10])}")
-            return
+        if len(question_cols) == 0:
+            # Si no se detectaron las etiquetas esperadas, caemos al comportamiento anterior.
+            metadata_cols = ["Marca temporal", "Ingresa el número asignado en la tarjeta que se te dio"]
+            metadata_patterns = ["marca", "temporal", "tarjeta", "número", "numero", "number", "card"]
 
-        last_3_questions = question_cols[-3:]
+            detected_questions = []
+            for col in df_form2.columns:
+                col_lower = col.lower().strip()
+                if any(pattern in col_lower for pattern in metadata_patterns):
+                    continue
+                if col in metadata_cols:
+                    continue
+                detected_questions.append(col)
+
+            if len(detected_questions) < 3:
+                st.warning(f"⚠️ Se encontraron menos de 3 preguntas en Form 2. Columnas detectadas: {len(detected_questions)}")
+                st.caption(f"Columnas detectadas: {', '.join(detected_questions[:10])}")
+                return
+
+            question_cols = detected_questions[-3:]
+            st.warning(
+                "⚠️ No se detectaron las columnas esperadas por nombre. "
+                "Se toman las últimas 3 columnas no meta como respaldo."
+            )
+        elif len(question_cols) < len(expected_question_labels):
+            missing_labels = [
+                label for label in expected_question_labels
+                if label.lower().strip() not in normalized_columns
+            ]
+            st.warning(
+                "⚠️ Faltan algunas columnas esperadas de Form 2. "
+                f"Se mostrarán las {len(question_cols)} columnas encontradas: {', '.join(question_cols)}. "
+                f"Faltantes: {', '.join(missing_labels)}."
+            )
         card_column_candidates = [col for col in df_form2.columns if "tarjeta" in col.lower()]
         card_column = card_column_candidates[0] if card_column_candidates else None
 
@@ -1276,18 +1253,18 @@ def render_conclusion_page():
         st.markdown("---")
 
         encuadre_correcto_map = {
-            1: "encuadre 1",
-            2: "encuadre 2",
-            3: "encuadre 3",
+            1: "Encuadre de desconfianza y responsabilización de actores",
+            2: "Encuadre de polarización social y exclusión",
+            3: "Encuadre de miedo y control",
         }
 
-        chart_columns = st.columns(3, gap="large")
+        st.subheader("Respuestas de los encuadres de las noticias del taller")
+        chart_columns = st.columns(max(1, len(question_cols)), gap="large")
         summary_details = []
 
-        for idx, question_col in enumerate(last_3_questions, 1):
+        for idx, question_col in enumerate(question_cols, 1):
             column = chart_columns[idx - 1]
             with column:
-                st.subheader(f"Noticia {idx}")
                 st.caption(question_col)
 
                 responses = df_form2[question_col].dropna()
@@ -1322,7 +1299,6 @@ def render_conclusion_page():
                     labels={"Porcentaje": "Porcentaje (%)", "Opción": "Opción seleccionada"},
                     color="Es correcta",
                     color_discrete_map={True: "#2ecc71", False: "#7f7f7f"},
-                    title=f"Encuadre de noticia {idx}",
                 )
                 fig.update_traces(texttemplate='%{text}%', textposition='outside', marker_line_width=0)
                 fig.update_layout(
@@ -1399,16 +1375,16 @@ def render_conclusion_page():
                 st.markdown(f"[Descargar {asset['label']}]({asset_url})")
 
         tarjetas_acertadas = []
-        if card_column:
+        if card_column and question_cols:
             expected_labels = ["encuadre 1", "encuadre 2", "encuadre 3"]
-            subset = df_form2[[card_column] + last_3_questions].dropna(subset=[card_column])
+            subset = df_form2[[card_column] + question_cols].dropna(subset=[card_column])
             for _, row in subset.iterrows():
                 tarjeta = str(row[card_column]).strip()
                 if not tarjeta:
                     continue
 
                 acertadas = True
-                for i, question_col in enumerate(last_3_questions, 1):
+                for i, question_col in enumerate(question_cols, 1):
                     respuesta = str(row.get(question_col, "")).lower()
                     expected = expected_labels[i - 1]
                     if expected not in respuesta:
@@ -1506,6 +1482,23 @@ def render_workshop_insights_page():
     st.markdown("---")
 
     st.subheader("Dashboard (Looker Studio)")
+    st.markdown(
+        """
+        <div style="
+            background-color:#e6f0ff;
+            border:1px solid #c5dfff;
+            border-radius:12px;
+            padding:12px 16px;
+            margin-bottom:12px;
+            color:#0d2f6e;
+            font-size:0.95rem;
+            line-height:1.5;
+        ">
+            Algunas de las siguientes gráficas están normalizadas y sólo reflejan comparaciones relativas entre categorías, no magnitudes reales.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     import streamlit.components.v1 as components
     try:
         components.html(
@@ -1963,15 +1956,6 @@ def main():
                     analysis_final_markdown,
                 ])
 
-                summary_text = "\n\n".join(summary_parts)
-                st.download_button(
-                    "Descargate el Taller!",
-                    data=summary_text.encode("utf-8"),
-                    file_name="resumen_taller.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key="download_taller_button",
-                )
         else:
             st.warning("Página actual fuera del flujo del taller.")
 
