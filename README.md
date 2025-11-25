@@ -1,61 +1,80 @@
-# 🚀 Streamlit Template App
+# 🧭 Taller de Integridad de la Información
 
-Un template completo para comenzar proyectos con Streamlit desde cero. Este template incluye una estructura organizada, componentes reutilizables y ejemplos de funcionalidades comunes.
+Aplicación Streamlit para talleres educativos sobre desinformación y sesgos informativos. Permite recopilar percepciones de participantes, generar análisis mediante IA, crear noticias con diferentes encuadres narrativos y visualizar resultados en tiempo real.
 
-## 📋 Características
+## 📋 Objetivo
 
-- **🏠 Dashboard principal** con métricas y datos de muestra
-- **📊 Análisis de datos** con carga de archivos CSV
-- **📈 Visualizaciones** con Plotly (gráficos interactivos)
-- **📝 Formularios** para entrada de datos y configuración
-- **⚙️ Configuración** de la aplicación
-- **🎨 UI moderna** con CSS personalizado
-- **📱 Diseño responsivo** con layout wide
+Taller interactivo que busca **entender cómo las narrativas cambian la forma en que percibimos las noticias** y desarrollar una mirada crítica frente a la desinformación. El sistema utiliza análisis de IA para identificar temas dominantes en las percepciones de los participantes y genera contenido educativo personalizado.
 
-## 🛠️ Estructura del Proyecto
+## 🏗️ Arquitectura Técnica
 
+- **Frontend**: Streamlit (aplicación web interactiva)
+- **Almacenamiento**: Google Sheets (respuestas de formularios)
+- **IA y Análisis**: OpenAI API (análisis de emociones, generación de noticias)
+- **Procesamiento**: pandas, numpy
+- **Visualización**: Plotly, matplotlib, wordcloud
+
+## 🔄 Flujo del Taller
+
+1. **Configuración**: Formador completa datos del taller (Form 0) y selecciona fecha
+2. **Cuestionario 1**: Participantes reportan percepciones de inseguridad y exposición a noticias
+3. **Análisis IA**: Identificación automática del tema dominante y emociones asociadas
+4. **Noticia neutral**: Generación de una noticia factual basada en el tema dominante
+5. **Noticias con encuadres**: Tres versiones de la misma noticia con diferentes narrativas (desconfianza, polarización, miedo/control)
+6. **Cuestionario 2**: Participantes reaccionan ante las diferentes versiones de noticias
+7. **Análisis final**: Dashboard con resultados, análisis de emociones por encuadre, impactos por género y conclusiones
+
+## ⚙️ Configuración
+
+### Variables de Entorno Requeridas
+
+Crear archivo `.streamlit/secrets.toml` o configurar variables de entorno:
+
+```toml
+# Google Sheets
+FORMS_SHEET_ID = "tu-sheet-id"
+FORM0_TAB = "nombre-tab-form0"
+FORM1_TAB = "nombre-tab-form1"
+FORM2_TAB = "nombre-tab-form2"
+GOOGLE_SERVICE_ACCOUNT = "{\"type\": \"service_account\", ...}"  # JSON como string
+
+# URLs de Formularios Google
+FORM0_URL = "https://docs.google.com/forms/..."
+FORM1_URL = "https://docs.google.com/forms/..."
+FORM2_URL = "https://docs.google.com/forms/..."
+
+# OpenAI API
+OPENAI_API_KEY = "sk-..."
 ```
-Streamlit/
-├── app.py                      # Aplicación principal
-├── requirements.txt            # Dependencias
-├── README.md                   # Documentación
-├── .streamlit/
-│   └── config.toml            # Configuración de Streamlit
-├── utils/
-│   ├── __init__.py
-│   └── helpers.py             # Funciones auxiliares
-└── components/
-    ├── __init__.py
-    ├── sidebar.py             # Componente de navegación
-    ├── charts.py              # Componentes de gráficos
-    └── forms.py               # Formularios
-```
 
-## 🚀 Instalación y Configuración
+### Credenciales de Google Sheets
 
-### 1. Clonar o descargar el template
+1. Crear una cuenta de servicio en [Google Cloud Console](https://console.cloud.google.com/)
+2. Habilitar Google Sheets API y Google Drive API
+3. Generar clave JSON y guardarla como `GOOGLE_SERVICE_ACCOUNT`
+4. Compartir el Google Sheet con el email de la cuenta de servicio
+
+## 🚀 Instalación
+
+### 1. Clonar el repositorio
 
 ```bash
-# Si tienes git
 git clone <repository-url>
 cd Streamlit
-
-# O simplemente descarga los archivos
 ```
 
-### 2. Crear un entorno virtual (recomendado)
+### 2. Crear entorno virtual
 
 ```bash
-# Windows (PowerShell)
 python -m venv venv
+
+# Windows (PowerShell)
 .\venv\Scripts\Activate.ps1
 
-# Windows (Command Prompt)
-python -m venv venv
+# Windows (CMD)
 venv\Scripts\activate
 
 # macOS/Linux
-python3 -m venv venv
 source venv/bin/activate
 ```
 
@@ -65,244 +84,89 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Ejecutar la aplicación
+### 4. Configurar credenciales
+
+Copiar `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml` y completar las variables requeridas.
+
+### 5. Ejecutar la aplicación
 
 ```bash
 streamlit run app.py
 ```
 
-La aplicación se abrirá automáticamente en tu navegador en `http://localhost:8501`
+La aplicación estará disponible en `http://localhost:8501`
 
-## 📚 Páginas Incluidas
+## 📁 Estructura del Proyecto
 
-### 🏠 Home
-- Dashboard con métricas principales
-- Tabla de datos de muestra
-- Botón de descarga de datos
-
-### 📊 Data Analysis
-- Carga de archivos CSV
-- Vista previa de datos
-- Estadísticas básicas
-- Información de columnas
-
-### 📈 Charts & Visualizations
-- Diferentes tipos de gráficos (línea, barras, scatter, histograma, heatmap)
-- Opciones de personalización
-- Gráficos interactivos con Plotly
-
-### 📝 Forms & Input
-- Formulario de contacto
-- Formulario de entrada de datos
-- Validación de campos
-
-### ⚙️ Settings
-- Configuración de la aplicación
-- Preferencias de tema y idioma
-- Configuración de datos y notificaciones
-
-## 🔧 Personalización
-
-### Cambiar el tema
-
-Edita el archivo `.streamlit/config.toml`:
-
-```toml
-[theme]
-primaryColor = "#1f77b4"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
 ```
-
-### Añadir nuevas páginas
-
-1. Añade la nueva página a `components/sidebar.py`:
-```python
-pages = [
-    # ... páginas existentes
-    {"name": "Mi Nueva Página", "icon": "🆕"}
-]
-```
-
-2. Crea la función en `app.py`:
-```python
-def render_mi_nueva_pagina():
-    st.header("Mi Nueva Página")
-    # Tu contenido aquí
-
-def main():
-    # ... código existente
-    elif page == "Mi Nueva Página":
-        render_mi_nueva_pagina()
-```
-
-### Añadir nuevos componentes
-
-Crea archivos en la carpeta `components/` siguiendo el patrón existente:
-
-```python
-import streamlit as st
-
-def mi_componente():
-    st.write("Mi componente personalizado")
+Streamlit/
+├── app.py                      # Aplicación principal (router y páginas)
+├── requirements.txt            # Dependencias Python
+├── config/
+│   └── secrets.py             # Gestión de credenciales
+├── data/
+│   ├── sheets.py              # Integración con Google Sheets
+│   ├── cleaning.py            # Normalización de datos
+│   └── utils.py               # Utilidades de fechas y datos
+├── services/
+│   ├── ai_analysis.py         # Análisis con OpenAI (emociones, género, general)
+│   └── news_generator.py      # Generación de noticias con encuadres
+├── components/
+│   ├── navigation.py          # Contexto de navegación entre páginas
+│   ├── whatsapp_bubble/       # Componente de visualización tipo WhatsApp
+│   ├── qr_utils/              # Generación de códigos QR
+│   └── image_repo.py          # Repositorio de imágenes por tema
+└── images/                    # Imágenes del taller
 ```
 
 ## 📦 Dependencias Principales
 
-- **streamlit**: Framework principal
-- **pandas**: Manipulación de datos
-- **numpy**: Operaciones numéricas
-- **plotly**: Gráficos interactivos
-- **matplotlib/seaborn**: Gráficos adicionales
+- **streamlit** ≥1.28.0: Framework web
+- **pandas** ≥2.0.0: Procesamiento de datos
+- **gspread** ≥6.1.4: API de Google Sheets
+- **google-auth** ≥2.36.0: Autenticación Google
+- **openai** ≥1.51.0: API de OpenAI
+- **plotly** ≥5.15.0: Gráficos interactivos
+- **wordcloud** 1.9.3: Nube de palabras
+- **qrcode[pil]** ≥7.4: Generación de códigos QR
 
-### Dependencias Opcionales
+Ver `requirements.txt` para lista completa.
 
-- **streamlit-option-menu**: Menús de navegación avanzados
-- **streamlit-aggrid**: Tablas interactivas
-- **scikit-learn**: Machine learning
-- **openpyxl**: Lectura de archivos Excel
+## 🔑 Funcionalidades Clave
 
-## 🎨 Estilos CSS
+- **Recopilación de datos**: Integración con Google Forms vía Google Sheets
+- **Análisis de IA**: Identificación automática de temas dominantes y patrones emocionales
+- **Generación de contenido**: Creación de noticias neutrales y con diferentes encuadres narrativos
+- **Visualización interactiva**: Dashboard con Looker Studio y gráficos en tiempo real
+- **Análisis diferenciado**: Por género, por encuadre narrativo, por contexto del grupo
 
-El template incluye estilos CSS personalizados en `app.py`. Puedes modificarlos o añadir nuevos:
-
-```python
-st.markdown("""
-<style>
-    .mi-clase-personalizada {
-        color: #ff6b6b;
-        font-weight: bold;
-    }
-</style>
-""", unsafe_allow_html=True)
-```
-
-## 📊 Gestión de Datos
-
-### Cargar datos
-
-```python
-from utils.helpers import load_data
-
-# Cargar archivo CSV
-df = load_data("mi_archivo.csv")
-```
-
-### Generar datos de muestra
-
-```python
-from utils.helpers import generate_sample_data
-
-# Generar 100 filas de datos de muestra
-sample_df = generate_sample_data(100)
-```
-
-### Validar formularios
-
-```python
-from utils.helpers import validate_email
-
-if validate_email("usuario@ejemplo.com"):
-    st.success("Email válido")
-```
-
-## 🔍 Funcionalidades Avanzadas
-
-### Session State
-
-El template utiliza `st.session_state` para mantener datos entre interacciones:
-
-```python
-# Guardar datos
-st.session_state.mi_dato = "valor"
-
-# Recuperar datos
-if "mi_dato" in st.session_state:
-    st.write(st.session_state.mi_dato)
-```
-
-### Caché de datos
-
-```python
-@st.cache_data
-def procesar_datos_pesados(datos):
-    # Procesamiento que tarda mucho tiempo
-    return datos_procesados
-```
-
-### Descarga de archivos
-
-```python
-# Generar CSV para descarga
-csv = df.to_csv(index=False)
-st.download_button(
-    label="📥 Descargar CSV",
-    data=csv,
-    file_name="datos.csv",
-    mime="text/csv"
-)
-```
-
-## 🚀 Despliegue
+## 🌐 Despliegue
 
 ### Streamlit Cloud
 
-1. Sube tu código a GitHub
-2. Ve a [share.streamlit.io](https://share.streamlit.io)
-3. Conecta tu repositorio
-4. Configura las variables de entorno si es necesario
+1. Subir código a GitHub
+2. Conectar repositorio en [share.streamlit.io](https://share.streamlit.io)
+3. Configurar secrets en la interfaz de Streamlit Cloud
 
-### Docker
-
-Crea un `Dockerfile`:
+### Local con Docker
 
 ```dockerfile
 FROM python:3.9-slim
-
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-
 COPY . .
-
 EXPOSE 8501
-
 CMD ["streamlit", "run", "app.py", "--server.address", "0.0.0.0"]
 ```
 
-## 🤝 Contribuir
+## 📝 Notas Técnicas
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+- La aplicación filtra datos por fecha del taller seleccionada
+- Los análisis se cachean en `st.session_state` para mejorar rendimiento
+- Las imágenes se asignan automáticamente según el tema dominante identificado
+- Los formularios deben estar configurados en Google Forms con campos específicos (ver código para detalles)
 
-## 📝 Licencia
+## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
-
-## 🆘 Soporte
-
-Si tienes problemas o preguntas:
-
-1. Revisa la [documentación oficial de Streamlit](https://docs.streamlit.io)
-2. Busca en los [foros de la comunidad](https://discuss.streamlit.io)
-3. Abre un issue en este repositorio
-
-## 🔄 Actualizaciones
-
-Para mantener el template actualizado:
-
-```bash
-# Actualizar Streamlit
-pip install --upgrade streamlit
-
-# Actualizar todas las dependencias
-pip install --upgrade -r requirements.txt
-```
-
----
-
-**¡Disfruta creando aplicaciones increíbles con Streamlit! 🎉**
+[Especificar licencia del proyecto]
