@@ -49,7 +49,13 @@ def normalize_date(date_value) -> str:
 
 
 def get_available_workshop_dates():
-    """Obtiene las fechas disponibles del Form 0 para seleccionar talleres."""
+    """Obtiene las fechas disponibles del Form 0 para seleccionar talleres.
+
+    Preferimos la columna específica de configuración del taller
+    **'Fecha de implementación'** si existe en el Form 0. Esto evita
+    confusiones con la zona horaria de la marca temporal de Google Forms,
+    y garantiza que la lista muestre la fecha real del taller y no el
+    momento en que se respondió el formulario."""
     FORMS_SHEET_ID = forms_sheet_id()
     FORM0_TAB = read_secrets("FORM0_TAB", "")
     
@@ -60,20 +66,31 @@ def get_available_workshop_dates():
         df0 = sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
         if df0.empty:
             return []
-        
-        # Obtener columna de fecha (Marca temporal)
-        date_col = get_date_column_name(df0)
-        if not date_col:
-            return []
-        
-        # Normalizar fechas y obtener valores únicos
-        df0['_normalized_date'] = df0[date_col].apply(normalize_date)
+
+        # 1️⃣ Intentar usar la columna específica "Fecha de implementación"
+        impl_col = None
+        for col in df0.columns:
+            col_clean = col.strip().lower()
+            if col_clean == "fecha de implementación".lower() or col_clean == "fecha de implementacion":
+                impl_col = col
+                break
+
+        if impl_col:
+            # Normalizar usando la fecha de implementación del taller
+            df0['_normalized_date'] = df0[impl_col].apply(normalize_date)
+        else:
+            # 2️⃣ Fallback: usar la columna de marca temporal detectada automáticamente
+            date_col = get_date_column_name(df0)
+            if not date_col:
+                return []
+            df0['_normalized_date'] = df0[date_col].apply(normalize_date)
+
+        # Normalizar fechas y obtener valores únicos (más reciente primero)
         df0 = df0.dropna(subset=['_normalized_date'])
         
         if df0.empty:
             return []
         
-        # Obtener fechas únicas ordenadas (más reciente primero)
         unique_dates = sorted(df0['_normalized_date'].unique(), reverse=True)
         return unique_dates
         

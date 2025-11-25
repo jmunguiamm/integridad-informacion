@@ -370,114 +370,34 @@ def render_setup_trainer_page():
         st.session_state.selected_workshop_date = None
 
 def render_introduction_page():
-    """🌎 Página de introducción con presentación compacta."""
+    """🌎 Página de introducción para la persona facilitadora."""
     import streamlit as st
     import streamlit.components.v1 as components
 
     # --- Apply tighter layout and reset top padding ---
-    st.markdown("""
-    <style>
-    /* Container */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 0rem !important;
-        max-width: 900px !important;
-    }
-
-    /* Main title */
-    .intro-header {
-        text-align: center;
-        font-size: 2rem;
-        font-weight: 700;
-        color: #004b8d;
-        margin-top: 2rem;       /* slightly lower the title */
-        margin-bottom: 0.5rem;
-    }
-    .intro-subtext {
-        text-align: center;
-        color: #333;
-        font-size: 1.05rem;
-        margin-bottom: 1.2rem;  /* reduced space under subtitle */
-    }
-
-    /* Presentation box */
-    .presentation-box {
-        background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 0.3rem 0.3rem 0.8rem 0.3rem; /* less vertical padding */
-        box-shadow: 0 4px 10px rgba(0,0,0,0.06);
-        margin-bottom: 1rem; /* tighter spacing below */
-    }
-    .presentation-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #222;
-        margin-bottom: 0.4rem;
-    }
-
-    /* Slides */
-    .responsive-slides {
-        position: relative;
-        width: 100%;
-        padding-top: 50%; /* slightly smaller height ratio */
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .responsive-slides iframe {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        border: none;
-    }
-
-    /* Section titles */
-    h2 {
-        color: #004b8d !important;
-        margin-top: 0.8rem !important;
-        margin-bottom: 0.4rem !important;
-    }
-
-    /* Paragraph text */
-    p {
-        font-size: 1.05rem;
-        color: #333;
-        line-height: 1.6;
-    }
-
-    /* Divider */
-    hr {
-        border: none;
-        border-top: 1px solid #e0e0e0;
-        margin: 1rem 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 
     # --- Header and intro text ---
-    st.markdown("## 🌎 Introducción al Taller de Integridad de la Información.")
+    st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
     st.markdown(
-        '<p style="font-size: 1.5rem; font-weight: 500;">Bienvenid@ al taller de <strong>Integridad de la Información</strong>.</p>',
+        '<p style="font-size: 1.5rem; font-weight: 500;">Bienvenid@ al módulo de <strong>gestión del Taller de Integridad de la Información</strong>.</p>',
         unsafe_allow_html=True
     )
 
-    # --- Propósito section (kept close to the slides) ---
+    # --- Propósito section (orientado a la facilitación) ---
+    st.markdown("### 🧭 💡 Propósito del módulo para facilitación")
     st.markdown("""
-    <style>
-    .intro-content {
-        font-size: 1.2rem;
-        line-height: 1.8;
-    }
-    .intro-content h2 {
-        font-size: 2rem;
-        margin-top: 1.5rem;
-        margin-bottom: 1rem;
-    }
-    .intro-content p {
-        font-size: 1.2rem;
+        <style>
+        .intro-content {
+            font-size: 1.2rem;
+            line-height: 1.8;
+        }
+        .intro-content h2 {
+            font-size: 2rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .intro-content p {
+            font-size: 1.2rem;
         margin-bottom: 1rem;
     }
     .intro-content ul, .intro-content ol {
@@ -485,67 +405,115 @@ def render_introduction_page():
     }
     </style>
     <div class="intro-content">
+    Este taller busca a través de la prevención, fortalecer la resistencia cognitiva de las y los participantes y desarrollar herramientas críticas para enfrentar la información errónea que circula en entornos digitales y cotidianos en contextos de seguridad pública.
+    A través de ejercicios simulados, se propone una experiencia activa y reflexiva que aprovecha las experiencias y conocimientos previos para desarrollar a través del pensamiento colectivo un análisis crítico de la información.
+
+    <p><strong>Resultados esperados:</strong></p>
+    <ul>
+        <li>Una mayor conciencia sobre los mecanismos de manipulación informativa.</li>
+        <li>Herramientas prácticas para identificar y cuestionar narrativas engañosas.</li>
+        <li>Fortalecimiento del juicio crítico individual y colectivo.</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
     
-    ## 💡 Propósito
-
-    Este taller busca **entender cómo las narrativas cambian la forma en que percibimos las noticias**
-    y desarrollar una mirada crítica frente a la desinformación y los sesgos informativos.
-
-    ## 📋 Instrucciones para el formador del taller
+    st.markdown("""
+        ## 📋 Instrucciones rápidas para la persona facilitadora
     1️⃣ **Configura el taller** — Haz clic en el botón de configuración en el menú lateral y configura tu taller.  
     2️⃣ **Selecciona la fecha del taller** — Esto servirá para la etapa de análisis de datos.  
     3️⃣ **Reparte una tarjeta a cada participante** — El identificados de cada participante es el número asignado, así mantenemos los datos anonimizados.  
     4️⃣ **Comparte el propósito con la audiencia** — Mantén un alto nivel de interactividad durante el taller.  
     5️⃣ **Disfruta, aprende y comparte**
-
-    ## 🧭 Estructura del taller
-    1️⃣ **Cuestionario 1** — Percepciones de inseguridad y exposición a noticias.  
-    2️⃣ **Análisis y tema dominante** — El modelo de IA identifica el patrón principal.  
-    3️⃣ **Cuestionario 2** — Reacciones de la audiencia.  
-    4️⃣ **Noticias del taller** — Tres versiones de una noticia (WhatsApp).  
-    5️⃣ **Análisis final del taller** — Dashboard + conclusiones.
-    </div>
     """, unsafe_allow_html=True)
 
- # --- Embedded Google Slides (responsive) ---
-    components.html(
-        """
-        <style>
-            .responsive-slides {
-                position: relative;
-                width: 100%;
-                padding-bottom: 56.25%; /* 16:9 aspect ratio (9/16 = 0.5625) */
-                height: 0;
-                overflow: hidden;
-            }
-            .responsive-slides iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }
-        </style>
-        <div class="responsive-slides">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyG19Nv6Cl-8y3zFbaDpLxBlxA54lUWTQrLK5NTnp4Qh4CcJhB1J_peZIiF8GGYfu5XbL93RCMzhLZ/pubembed?start=false&loop=false&delayms=3000" 
-                    allowfullscreen="true" 
-                    mozallowfullscreen="true" 
-                    webkitallowfullscreen="true">
-            </iframe>
-        </div>
-        """,
-        height=500,  # Altura del contenedor (el iframe se ajustará proporcionalmente)
-    )
+
         # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
 
 
+def render_workshop_start_page():
+    """🎬 Pantalla de inicio proyectable para el taller (audiencia)."""
+    import streamlit as st
+    import streamlit.components.v1 as components
+
+    st.markdown("""
+    <style>
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 0rem !important;
+        max-width: 900px !important;
+    }
+    .intro-header {
+        text-align: center;
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #004b8d;
+        margin-top: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    .intro-subtext {
+        text-align: center;
+        color: #333;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Encabezado para la audiencia
+    st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
+    st.markdown(
+        '<p class="intro-subtext"> Exploraremos cómo se construyen las noticias, qué emociones nos despiertan y '
+        'cómo podemos identificar desinformación y sesgos informativos.</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Breve estructura pensada para proyectar
+    st.markdown("### 🧭 💡 Propósito del taller")
+    st.markdown("""
+        <style>
+        .intro-content {
+            font-size: 1.2rem;
+            line-height: 1.8;
+        }
+        .intro-content h2 {
+            font-size: 2rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .intro-content p {
+            font-size: 1.2rem;
+        margin-bottom: 1rem;
+    }
+    .intro-content ul, .intro-content ol {
+        font-size: 1.2rem;
+    }
+    </style>
+    <div class="intro-content">
+    Te damos la bienvenida al taller de integridad de la información. 
+    Este taller busca a través de la  ejercicios simulados y de reflexión que fortalezcas tu resistencia cognitiva y desarrolles herramientas críticas para enfrentar la información errónea que circula en entornos digitales y cotidianos en contextos de seguridad pública.
+    Toda la información que proporciones será anónima, pero es necesario que tomes en cuenta que por la naturaleza de los temas abordados puedes experimentar sensibilidad. Por lo que es necesario que antes de continuar el taller, sepas lo siguiente: Estás en un espacio seguro, tu participación es voluntaria y tienes la libertad para abandonar la sesión en cualquier momento, sin consecuencias académicas, sociales ni institucionales, en el ejercicio no se grabarán rostros ni voces, ni se te presionará para participar o responder preguntas. 
+    En caso de que lo solicites, acércate a la persona que facilita en taller para que te guíe en el proceso.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(
+        "📌 *Cuando todo el grupo esté listo, usa las flechas de la barra lateral para pasar al siguiente paso del taller.*"
+    )
+
 
 def render_form1_page():
     """Cuestionario 1 – QR y conteo."""
-    st.header("📋 Cuestionario 1 (audiencia)")
+    st.header("📋 ¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año? ")
+    st.markdown("""
+        ## 📋 Instrucciones rápidas para la persona facilitadora
+     ** Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.**
+     ** NOTA: ingresa el número que se te repartio al inicio del taller. **
+    """, unsafe_allow_html=True)
+    
+    
     FORM1_URL = _read_secrets("FORM1_URL", "")
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM1_TAB = _read_secrets("FORM1_TAB", "")
@@ -589,7 +557,10 @@ def render_form1_page():
 def render_analysis_trends_page():
     """Analiza Form 1 completo → tema dominante + nube de palabras (manteniendo tu prompt)."""
     st.header("📈 Análisis y tema dominante")
-
+    st.markdown("""
+        ## ¡Gracias por compartirnos tu respuestas! 
+        # A continuación, veremos cuál es el tema que predomina en el grupo que ha causado inseguridad. 
+    """, unsafe_allow_html=True)
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM1_TAB = _read_secrets("FORM1_TAB", "")
     FORM0_TAB = _read_secrets("FORM0_TAB", "")
@@ -1686,6 +1657,7 @@ def render_workshop_insights_page():
 ROUTES = {
     "Configuraciones": render_setup_trainer_page,      
     "Introducción al taller": render_introduction_page,           
+    "Inicio del taller": render_workshop_start_page,
     "Cuestionario 1": render_form1_page,                          
     "Análisis y tema dominante": render_analysis_trends_page,   
     "Noticia neutral del taller": render_neutral_news_page,
