@@ -458,7 +458,7 @@ def render_introduction_page():
 
 
     # --- Header and intro text ---
-    st.markdown("## 🌎 Introducción al Taller de Integridad de la Información")
+    st.markdown("## 🌎 Introducción al Taller de Integridad de la Información..")
     st.markdown(
         '<p style="font-size: 1.5rem; font-weight: 500;">Bienvenid@ al taller de <strong>Integridad de la Información</strong>.</p>',
         unsafe_allow_html=True
