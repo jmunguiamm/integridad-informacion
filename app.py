@@ -506,11 +506,12 @@ def render_workshop_start_page():
 
 def render_form1_page():
     """Cuestionario 1 – QR y conteo."""
-    st.header("📋 ¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año? ")
+    st.header("¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año? ")
     st.markdown("""
-        ## 📋 Instrucciones rápidas para la persona facilitadora
-     ** Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.**
-     ** NOTA: ingresa el número que se te repartio al inicio del taller. **
+        ### 📋 Instrucciones rápidas para la audiencia:
+     Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
+    <br>
+     NOTA: ingresa el número que se te repartio al inicio del taller. 
     """, unsafe_allow_html=True)
     
     
@@ -558,8 +559,8 @@ def render_analysis_trends_page():
     """Analiza Form 1 completo → tema dominante + nube de palabras (manteniendo tu prompt)."""
     st.header("📈 Análisis y tema dominante")
     st.markdown("""
-        ## ¡Gracias por compartirnos tu respuestas! 
-        # A continuación, veremos cuál es el tema que predomina en el grupo que ha causado inseguridad. 
+        ### ¡Gracias por compartirnos tu respuestas! 
+        ### A continuación, veremos cuál es el tema que predomina en el grupo que ha causado inseguridad. 
     """, unsafe_allow_html=True)
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM1_TAB = _read_secrets("FORM1_TAB", "")
@@ -710,7 +711,7 @@ def render_analysis_trends_page():
         st.markdown("**Ejemplos representativos:**")
         for q in data["representative_answers"]:
             st.markdown(f"- {q}")
-
+    st.markdown("¿Considerabas que ese tema podría estar causando ese grado de inseguridad?")
      # ---- NUBE DE PALABRAS ----
     st.markdown("---")
     st.subheader("☁️ Nube de palabras — Palabras clave")
@@ -766,7 +767,9 @@ def render_analysis_trends_page():
 def render_neutral_news_page():
     """Genera una noticia neutral basada en el tema dominante y el contexto del Form 0."""
     st.header("📰 Noticia neutral del taller")
-
+    st.caption("A continuación, IA generará una evento ficticio basado en el tema dominante que se identificó en la nube de palabras. ")
+    st.caption("Con el apoyo de una persona voluntaria, lean la noticia en voz alta y pasen a la siguiente ventana")
+    
     OPENAI = _read_secrets("OPENAI_API_KEY", "")
     if not OPENAI:
         st.error("Configura la clave OPENAI_API_KEY en secrets para generar la noticia.")
@@ -908,6 +911,8 @@ Formato de salida esperado:
 def render_form2_page():
     """Cuestionario 2 — QR y guía para continuar con noticias."""
     st.header("📲 Cuestionario 2 — reacciones ante noticias")
+    st.caption("Muy bien, ahora el siguiente paso es que escanees el código QR que te llevará a un formulario. En las pantallas aparecerán 3 mensajes de redes hipotéticos derivados del evento ficticio, pero escritas de forma muy diferente.")
+
 
     FORM2_URL = _read_secrets("FORM2_URL", "")
     if FORM2_URL:
@@ -1014,6 +1019,7 @@ def _parse_news_blocks(raw: str):
 def render_news_flow_page():
     """Muestra 3 noticias tipo WhatsApp y permite generarlas desde esta página."""
     st.header("💬 Noticias del taller")
+    st.caption("Contesta desde tu teléfono celular las secciones del cuestionario correspondientes a cada mensaje y como te vaya guiando la persona facilitadora.")
 
     dominant_theme = st.session_state.get("dominant_theme")
     generate_disabled = dominant_theme is None
@@ -1100,8 +1106,8 @@ def render_news_comparison_page():
         st.warning("Aún no se han generado las noticias con encuadres. Ve a 'Noticias del taller' y créalas primero.")
         return
 
-    st.caption("1. Observa cómo cambia la narrativa del mismo hecho según el encuadre.")
-    st.caption("2. Utiliza esta comparativa para discutir tono, sesgos y emociones que provoca cada versión.")
+    st.caption("1. Creen grupos entre 4-8 personas. <br> En grupo lean nuevamente las noticias y observen cómo cambia la narrativa del mismo hecho. Esto se conoce como encuadre narrativo.")
+    st.caption("2. Discutan e identifiquen el encuadre. <br> Cada noticia fue escrita con un encuadre diferente y en su grupo contarán con tarjetas que describen diferentes encuadres narrativos. Discutan cual corresponde a cada mensaje e identifíquenlas en el cuestionario de manera individual.")
     st.markdown("---")
 
     # Mostrar cada noticia en un desplegable
@@ -1122,10 +1128,10 @@ def render_explanation_page():
     """)
 
     st.subheader("Hilo Conductor")
-    st.text_area("Lo que acabamos de ver", "Por ejemplo, los mensajes que vimos corresponden a un mismo evento pero con encuadres narrativos distintos.", height=150)
+    st.caption("Los mensajes que vimos corresponden a un mismo evento pero con encuadres narrativos distintos.")
 
     st.subheader("Descripción de que es un encuadre")
-    st.text_area("descripcion_encuadres", "Un encuadre narrativo es la técnica de enmarcar o delimitar la porción de realidad que se va a presentar en una historia, ya sea escrita o visual, influyendo en cómo el espectador o lector interpreta los eventos y emociones" , height=150)
+    st.text_area("descripcion_encuadres")
 
     st.subheader("Encuadres de la noticia")
     st.text_area("descripcion_encuadres_usado", " Descripción del encuadre de desconfianza y responsabilización de actores. Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano. Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. Descripción del encuadre de  polarización social y exclusión. Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de 'enemigos'. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia.", height=150)
@@ -1635,7 +1641,11 @@ def render_workshop_insights_page():
             data = analyze_gender_impacts_json(df_all_cached, dominant_theme_cached, form0_context_cached)
             markdown_output = _format_gender_json_to_markdown(data)
             st.markdown(markdown_output)
-
+    
+    st.markdown("### Explicacion de los componentes")
+    with st.expander("¿Qué revisa este bloque?"):
+        st.markdown("No solo nos afectan las diferencias demográficas, la forma en la que percibimos las noticias también es impactada por si somo vulnerables, ... notar que cada encuadre se traduce, o incrementa su impacto usando diferentes componentes gramaticales y narrativos como el uso de los signos, emogis, imágenes, etc regreesa al gráfico y comenta y compartan impresiones sobre ¿qué creen que puedan ser más significativas en la confianza en las noticias?")
+        
 
     st.markdown("### Análisis general del taller")
     with st.expander("¿Qué integra este resumen?"):
