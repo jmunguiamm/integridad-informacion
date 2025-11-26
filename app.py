@@ -269,57 +269,12 @@ def render_setup_trainer_page():
     <div class="setup-sub">Completa esta información antes de iniciar el taller.</div>
     """, unsafe_allow_html=True)
 
-    if st.button("🏠 Volver a la introducción", use_container_width=True):
-        st.session_state.current_page = "Introducción al taller"
-        st.rerun()
-
-    FORM0_URL = _read_secrets("FORM0_URL", "")
     FORMS_SHEET_ID = _forms_sheet_id()    
     FORM0_TAB = _read_secrets("FORM0_TAB", "")
     SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
-    
-    
-    if FORM0_URL:
-        st.markdown("### 📝 Configuración: Paso 1 de 2 - Creación del taller")
-
-        # --- Estilos para el contenedor ---
-        st.markdown("""
-        <style>
-        .form-embed {
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-            margin-top: 0.5rem;
-            margin-bottom: 1.5rem;
-            height: 900px;
-        }
-        .form-embed iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # --- Iframe embebido del Formulario 0 ---
-        st.markdown(f"""
-        <div class="form-embed">
-            <iframe 
-                src="{FORM0_URL}?embedded=true"
-                frameborder="0" 
-                marginheight="0" 
-                marginwidth="0">
-                Cargando…
-            </iframe>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
 
     # Selector de fecha del taller
-    st.markdown("---")
-    st.subheader("📅 Configuración: Paso 2 de 2 - Seleccionar taller a analizar")
+    st.subheader("📅 Configuración: Seleccionar taller a analizar")
     
     if FORMS_SHEET_ID and FORM0_TAB and SA:
         try:
@@ -419,15 +374,55 @@ def render_introduction_page():
     
     st.markdown("""
         ## 📋 Instrucciones rápidas para la persona facilitadora
-    1️⃣ **Configura el taller** — Haz clic en el botón de configuración en el menú lateral y configura tu taller.  
-    2️⃣ **Selecciona la fecha del taller** — Esto servirá para la etapa de análisis de datos.  
-    3️⃣ **Reparte una tarjeta a cada participante** — El identificados de cada participante es el número asignado, así mantenemos los datos anonimizados.  
-    4️⃣ **Comparte el propósito con la audiencia** — Mantén un alto nivel de interactividad durante el taller.  
-    5️⃣ **Disfruta, aprende y comparte**
+    1️⃣ **Prepara el taller** — Haz clic en el siguiente [enlace de Google Drive](https://drive.google.com/drive/folders/1xcl_-8u5jKtCjzk2af4EI7QhdRBUXVIN?usp=drive_link), descarga los PDFs presentes, imprímelos y llévalos el día del taller.  
+    2️⃣ **Configura el taller** — Haz clic en el botón de siguiente (flecha derecha) en la barra lateral izquierda para acceder a las configuraciones del taller.  
+    3️⃣ **Selecciona la fecha del taller** — Esto servirá para la etapa de análisis de datos.  
+    4️⃣ **Reparte una tarjeta a cada participante** — El identificados de cada participante es el número asignado, así mantenemos los datos anonimizados.  
+    5️⃣ **Comparte el propósito con la audiencia** — Mantén un alto nivel de interactividad durante el taller.  
+    6️⃣ **Disfruta, aprende y comparte**
     """, unsafe_allow_html=True)
 
+    # --- Formulario 0 embebido (Paso 1/2 de configuración) ---
+    FORM0_URL = _read_secrets("FORM0_URL", "")
+    if FORM0_URL:
+        st.markdown("### 📝 Preparación: Formulario de registro del taller")
 
-        # --- Siguiente paso del taller (en la página principal) ---
+        # --- Estilos para el contenedor ---
+        st.markdown("""
+        <style>
+        .form-embed {
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            margin-top: 0.5rem;
+            margin-bottom: 1.5rem;
+            height: 900px;
+        }
+        .form-embed iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # --- Iframe embebido del Formulario 0 ---
+        st.markdown(f"""
+        <div class="form-embed">
+            <iframe 
+                src="{FORM0_URL}?embedded=true"
+                frameborder="0" 
+                marginheight="0" 
+                marginwidth="0">
+                Cargando…
+            </iframe>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
+
+    # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
 
@@ -464,10 +459,10 @@ def render_workshop_start_page():
     # Encabezado para la audiencia
     st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
     st.markdown(
-        '<p class="intro-subtext"> Exploraremos cómo se construyen las noticias, qué emociones nos despiertan y '
-        'cómo podemos identificar desinformación y sesgos informativos.</p>',
-        unsafe_allow_html=True,
-    )
+        '<p style="font-size: 1.5rem; font-weight: 500;">Exploraremos cómo se construyen las noticias, qué emociones nos despiertan y '
+        'cómo podemos identificar desinformación y sesgos informativos.</strong>.</p>',
+        unsafe_allow_html=True
+        )   
 
     # Breve estructura pensada para proyectar
     st.markdown("### 🧭 💡 Propósito del taller")
@@ -506,7 +501,7 @@ def render_workshop_start_page():
 
 def render_form1_page():
     """Cuestionario 1 – QR y conteo."""
-    st.header("¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año? ")
+    st.markdown("## ¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año?")
     st.markdown("""
         ### 📋 Instrucciones rápidas para la audiencia:
      Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
@@ -557,11 +552,16 @@ def render_form1_page():
 
 def render_analysis_trends_page():
     """Analiza Form 1 completo → tema dominante + nube de palabras (manteniendo tu prompt)."""
-    st.header("📈 Análisis y tema dominante")
-    st.markdown("""
-        ### ¡Gracias por compartirnos tu respuestas! 
-        ### A continuación, veremos cuál es el tema que predomina en el grupo que ha causado inseguridad. 
-    """, unsafe_allow_html=True)
+    st.markdown("## 📈 Análisis y tema dominante")
+    st.markdown(
+        '<p style="font-size: 1.5rem; font-weight: 500;">¡Gracias por compartirnos tu respuestas</strong>!</p>',
+        unsafe_allow_html=True
+        )   
+    st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 500;">A continuación, veremos cuál es el tema que predomina en el grupo que ha causado inseguridad</strong>.</p>',
+            unsafe_allow_html=True
+            )  
+
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM1_TAB = _read_secrets("FORM1_TAB", "")
     FORM0_TAB = _read_secrets("FORM0_TAB", "")
@@ -766,9 +766,16 @@ def render_analysis_trends_page():
 
 def render_neutral_news_page():
     """Genera una noticia neutral basada en el tema dominante y el contexto del Form 0."""
-    st.header("📰 Noticia neutral del taller")
-    st.caption("A continuación, IA generará una evento ficticio basado en el tema dominante que se identificó en la nube de palabras. ")
-    st.caption("Con el apoyo de una persona voluntaria, lean la noticia en voz alta y pasen a la siguiente ventana")
+    st.markdown("## 📰 Noticia neutral del taller")
+
+    st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 500;">A continuación, IA generará una evento ficticio basado en el tema dominante que se identificó en la nube de palabras</strong>.</p>',
+            unsafe_allow_html=True
+            )  
+    st.markdown(
+                '<p style="font-size: 1.5rem; font-weight: 500;">Con el apoyo de una persona voluntaria, lean la noticia en voz alta y pasen a la siguiente ventana</strong>.</p>',
+                unsafe_allow_html=True
+                )  
     
     OPENAI = _read_secrets("OPENAI_API_KEY", "")
     if not OPENAI:
@@ -910,9 +917,13 @@ Formato de salida esperado:
 
 def render_form2_page():
     """Cuestionario 2 — QR y guía para continuar con noticias."""
-    st.header("📲 Cuestionario 2 — reacciones ante noticias")
-    st.caption("Muy bien, ahora el siguiente paso es que escanees el código QR que te llevará a un formulario. En las pantallas aparecerán 3 mensajes de redes hipotéticos derivados del evento ficticio, pero escritas de forma muy diferente.")
-
+    st.markdown("## 📲 Cuestionario 2 — reacciones ante noticias")
+    
+    st.markdown(
+        '<p style="font-size: 1.5rem; font-weight: 500;">Muy bien, ahora el siguiente paso es que escanees el código QR que te llevará a un formulario. En las pantallas aparecerán 3 mensajes de redes hipotéticos derivados del evento ficticio, pero escritas de forma muy diferente.</p>',
+        unsafe_allow_html=True,
+    )
+   
 
     FORM2_URL = _read_secrets("FORM2_URL", "")
     if FORM2_URL:
@@ -1018,8 +1029,11 @@ def _parse_news_blocks(raw: str):
 
 def render_news_flow_page():
     """Muestra 3 noticias tipo WhatsApp y permite generarlas desde esta página."""
-    st.header("💬 Noticias del taller")
-    st.caption("Contesta desde tu teléfono celular las secciones del cuestionario correspondientes a cada mensaje y como te vaya guiando la persona facilitadora.")
+    st.markdown("## 💬 Noticias del taller")
+    st.markdown(
+        '<p style="font-size: 1.5rem; font-weight: 500;">Contesta desde tu teléfono celular las secciones del cuestionario correspondientes a cada mensaje y como te vaya guiando la persona facilitadora.</p>',
+        unsafe_allow_html=True,
+    )
 
     dominant_theme = st.session_state.get("dominant_theme")
     generate_disabled = dominant_theme is None
@@ -1099,7 +1113,7 @@ def render_news_flow_page():
 
 def render_news_comparison_page():
     """Visualiza las tres versiones de la noticia para comparar encuadres."""
-    st.header("Noticias 1, 2 y 3")
+    st.markdown("## Noticias 1, 2 y 3")
 
     news_blocks = st.session_state.get("generated_news_blocks")
     if not news_blocks:
@@ -1122,26 +1136,25 @@ def render_news_comparison_page():
 
 def render_explanation_page():
     """📘 Página intermedia entre Noticias y Análisis final."""
-    st.header("📘 Explicación del Taller")
-    st.markdown("""
-    En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final.
-    """)
-
+    st.markdown("## 📘 Explicación del taller")
+    st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 500;">En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final</strong>.</p>',
+            unsafe_allow_html=True
+            )  
+    
     st.subheader("Hilo Conductor")
-    st.caption("Los mensajes que vimos corresponden a un mismo evento pero con encuadres narrativos distintos.")
-
-    st.subheader("Descripción de que es un encuadre")
-    st.text_area("descripcion_encuadres")
-
-    st.subheader("Encuadres de la noticia")
-    st.text_area("descripcion_encuadres_usado", " Descripción del encuadre de desconfianza y responsabilización de actores. Cuestiona la legitimidad institucional o mediática, generando incertidumbre y cinismo ciudadano. Atribuye causas o soluciones a actores específicos (individuos, instituciones, grupos). Influye en la percepción pública sobre quién tiene la culpa o el mérito. Descripción del encuadre de  polarización social y exclusión. Amplifica divisiones sociales y políticas mediante la apelación a emociones intensas (miedo, ira, resentimiento). Favorece el enfrentamiento simbólico y la construcción de 'enemigos'. Atribuye la causa de los problemas a ciertos grupos o sectores sociales sin evidencia.", height=150)
-
-    st.markdown("---")
-
-
+    st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 300;">Sabías que existen factores cognitivos, sociales y emocionales que influyen directamente en la aceptación de la información falsa, incompleta o nociva? En este ejercicio de prevención, lo que hicimos fue exponernos a mensajes que estaban enmarcados con narraciones intencionales, las cuales se identifican como marcos narrativos, estos emplean técnicas de lenguaje con el propósito de impactar las emociones y percepciones de las personas.</strong>.</p>',
+            unsafe_allow_html=True
+            )  
+    st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 300;">En la siguiente pantalla analizaremos los impactos de los marcos narrativos en las emociones y la percepción de confianza.</strong>.</p>',
+            unsafe_allow_html=True
+            )  
+            
 def render_conclusion_page():
     """Página de conclusión con gráficos de las últimas 3 preguntas de Form 2."""
-    st.header("🎯 Conclusión")
+    st.markdown("## 🎯 Conclusión")
 
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM2_TAB = _read_secrets("FORM2_TAB", "")
@@ -1172,10 +1185,11 @@ def render_conclusion_page():
             return
 
         # Buscamos las columnas específicas de las tres últimas preguntas por encuadre.
+        # Usamos los textos completos tal como aparecen en Form 2 (con acentos y signo de apertura).
         expected_question_labels = [
-            "Cual crees que sea el encuadre usado en la noticia 1?",
-            "Cual crees que sea el encuadre usado en la noticia 2?",
-            "Cual crees que sea el encuadre usado en la noticia 3?",
+            "¿Cuál crees que sea el encuadre usado en la noticia 1?",
+            "¿Cuál crees que sea el encuadre usado en la noticia 2?",
+            "¿Cuál crees que sea el encuadre usado en la noticia 3?",
         ]
 
         normalized_columns = {col.lower().strip(): col for col in df_form2.columns}
@@ -1314,8 +1328,9 @@ def render_conclusion_page():
 
         st.markdown("<br>".join(summary_lines), unsafe_allow_html=True)
         st.markdown("---")
-        st.subheader("Preguntas Generativa Fija")
-        st.caption("Gap filler para cerrar el taller")
+        st.subheader("Pregunta")
+        st.caption("Ahora que ya hemos analizado los diferentes marcos narrativos, sus elementos, las emociones que se involucran y los sesgos que pueden confirmar información errónea: ¿Qué herramientas o habilidades aprendidas te llevas para poner en práctica cuando te encuentres frente a mensajes en las redes?" 
+        "En la siguiente liga te compartimos algunas sugerencias que se sencuentran en la guía ponle filtro")
 
         with st.container():
             st.subheader("Lista de recomendaciones para actuar")
@@ -1385,7 +1400,7 @@ def render_conclusion_page():
 
 def render_workshop_insights_page():
     """Dashboard + (debajo) síntesis automática con datos reales (Form 0/1/2/3/4 si están conectados)."""
-    st.header("📊 Análisis final del taller")
+    st.markdown("## 📊 Análisis final del taller")
     from services.ai_analysis import (
             analyze_emotions_json,
             analyze_gender_impacts_json,
@@ -1616,8 +1631,8 @@ def render_workshop_insights_page():
     st.markdown("### Analizar emociones por encuadre")
     with st.expander("¿Qué calcula este análisis?"):
         st.markdown(
-            "Explora cómo varían las emociones reportadas por las y los participantes según el encuadre de cada noticia. "
-            "Sirve para debatir qué narrativas despiertan mayor empatía, temor o rechazo."
+            "El contenido emocional en los mensajes y noticias aumenta la persuasión y la difusión de información errónea (Ecker, 2022. The psychological drivers of misinformation belief and its resistance to correction), si bien, las emociones son distintas para cada persona, pueden estar influenciadas, por el contexto y las experiencias, de los cuales se valen los marcos narrativos para fortalecer su influencia."  
+            "Abre la pregunta generativa y regresa a los gráficos de emociones para observar y responder."
         )
     if st.button("➕ Agregar análisis generativo", key="btn_emociones"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
@@ -1631,8 +1646,7 @@ def render_workshop_insights_page():
     st.markdown("### Analizar impactos por género")
     with st.expander("¿Qué revisa este bloque?"):
         st.markdown(
-            "Compara percepciones y emociones diferenciadas por género para identificar brechas o sensibilidades específicas. "
-            "Útil para ajustar la conversación y asegurar voces diversas en el taller."
+            "Las personas suelen otorgar validez a la información de manera intuitiva, la repetición de afirmaciones refuerza esta percepción. Cuando una idea se repite, tiende a parecer más verdadera, fenómeno que se intensifica con la viralización en redes sociales. Este proceso genera el llamado efecto de verdad ilusoria, sustentado en tres señales cognitivas: familiaridad (el mensaje ya fue visto antes), fluidez (se procesa con facilidad) y coherencia (parece consistente con lo que se recuerda). (Ecker, 2022, The psychological drivers of misinformation belief and its resistance to correction; OCDE,2024, Hechos frente a falsedades). Así como las emociones que analizamos anteriormente, estas particularidades permiten que los marcos narrativos tenga una fuerte presencia e influencia. A continuación, abre el análisis y la pregunta generativa y regresa a los gráficos de confianza para observar y responder."
         )
     if st.button("➕ Agregar análisis generativo", key="btn_genero"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
@@ -1644,9 +1658,9 @@ def render_workshop_insights_page():
     
     st.markdown("### Explicacion de los componentes")
     with st.expander("¿Qué revisa este bloque?"):
-        st.markdown("No solo nos afectan las diferencias demográficas, la forma en la que percibimos las noticias también es impactada por si somo vulnerables, ... notar que cada encuadre se traduce, o incrementa su impacto usando diferentes componentes gramaticales y narrativos como el uso de los signos, emogis, imágenes, etc regreesa al gráfico y comenta y compartan impresiones sobre ¿qué creen que puedan ser más significativas en la confianza en las noticias?")
+        st.markdown(
+"Los componentes gráficos y textuales y narrativos desempeñan un papel fundamental en la forma en que se percibe y se da credibilidad a la información errónea. Estos componentes como imágenes, videos deepfake, texto manipulado y otros elementos visuales, se utiliza intencionalmente para apelar a las emociones, aumentando la persuasión y la probabilidad de que la información falsa persista incluso después de ser corregida. La IA generativa ha facilitado la creación y difusión de contenido atractivo y altamente convincente mediante la combinación de imagen, video, voz y texto, lo cual hace cada vez más difícil para los usuarios distinguir entre contenido auténtico y contenido manipulado. Regresen a los gráficos y discutan: ¿Cuáles son los elementos que sobresalieron en cada marco narrativo? ¿Hay algunos elementos que causan más credibilidad que otros? ¿Cuáles y por qué?")
         
-
     st.markdown("### Análisis general del taller")
     with st.expander("¿Qué integra este resumen?"):
         st.markdown(
@@ -1664,9 +1678,13 @@ def render_workshop_insights_page():
 
 
 # ---------- ROUTER (etiquetas/orden solicitados) ----------
+# Orden UX:
+# 1) Introducción al taller (instrucciones a la persona formadora)
+# 2) Configuraciones (Form 0 + selección de taller)
+# 3) Inicio del taller (pantalla proyectable para todas las personas)
 ROUTES = {
-    "Configuraciones": render_setup_trainer_page,      
     "Introducción al taller": render_introduction_page,           
+    "Configuraciones": render_setup_trainer_page,      
     "Inicio del taller": render_workshop_start_page,
     "Cuestionario 1": render_form1_page,                          
     "Análisis y tema dominante": render_analysis_trends_page,   
@@ -1795,17 +1813,40 @@ def main():
             margin-bottom: 0.4rem;
         }
 
-        /* Logo perfectly anchored at bottom */
+        /* Logos perfectamente anclados al fondo */
         .sidebar-logo {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            margin-top: auto;        /* push logo to the bottom */
+            margin-top: auto;        /* empuja el bloque de logos hacia abajo */
             padding-top: 1rem;
+            gap: 0.6rem;
         }
         .sidebar-logo img {
-            width: 100px;
-            opacity: 0.9;
+            max-width: 90%;
+            max-height: 60px;        /* altura consistente y un poco menor para todos los logos */
+            width: auto;
+            height: auto;
+            opacity: 0.95;
+            display: block;
+            object-fit: contain;
+        }
+        .sidebar-logo-main {
+            max-width: 75%;          /* algo más angosto para alinearse visualmente con la fila inferior */
+        }
+        .sidebar-logo-bottom-row {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;  /* logos a izquierda y derecha */
+            align-items: center;
+            gap: 0.6rem;
+            width: 100%;
+            padding: 0 0.4rem;              /* pequeño margen lateral */
+        }
+        .sidebar-logo-bottom-row img {
+            max-width: 50%;               /* aún más grandes, ocupan prácticamente media fila cada uno */
+            max-height: 80px;             /* más altos para darles mayor presencia */
         }
         [data-testid="stSidebar"] button[kind="primary"] {
             background-color: #dc3545 !important;  /* Red background */
@@ -1943,19 +1984,45 @@ def main():
 
         st.markdown("---")
 
-        # Logo PNUD centrado
-        logo_path = "images/PNUD_logo.png"
-        if os.path.isfile(logo_path):
-            with open(logo_path, "rb") as f:
-                logo_b64 = base64.b64encode(f.read()).decode()
-            st.markdown(
-                f"""
-                <div class="sidebar-logo">
-                    <img src="data:image/png;base64,{logo_b64}" alt="Logo PNUD">
-                </div>
-                """,
-                unsafe_allow_html=True
+        # Logos centrados en la parte inferior del sidebar
+        logo_path_zac = "images/zacatecas_logo_transparent_precise2.png"
+        logo_path_pnud = "images/PNUD_logo.png"
+        logo_path_ponle = "images/Logo PonleFiltro.png"
+
+        logos_html = '<div class="sidebar-logo">'
+
+        # Fila superior: Gobierno de Zacatecas
+        if os.path.isfile(logo_path_zac):
+            with open(logo_path_zac, "rb") as f:
+                logo_zac_b64 = base64.b64encode(f.read()).decode()
+            logos_html += (
+                f'<img class="sidebar-logo-main" '
+                f'src="data:image/png;base64,{logo_zac_b64}" '
+                f'alt="Logo Gobierno de Zacatecas">'
             )
+
+        # Fila inferior: PNUD (izquierda) y Ponle Filtro (derecha)
+        bottom_row = ""
+        if os.path.isfile(logo_path_pnud):
+            with open(logo_path_pnud, "rb") as f:
+                logo_pnud_b64 = base64.b64encode(f.read()).decode()
+            bottom_row += (
+                f'<img src="data:image/png;base64,{logo_pnud_b64}" alt="Logo PNUD">'
+            )
+
+        if os.path.isfile(logo_path_ponle):
+            with open(logo_path_ponle, "rb") as f:
+                logo_ponle_b64 = base64.b64encode(f.read()).decode()
+            bottom_row += (
+                f'<img src="data:image/png;base64,{logo_ponle_b64}" alt="Logo Ponle Filtro">'
+            )
+
+        if bottom_row:
+            logos_html += f'<div class="sidebar-logo-bottom-row">{bottom_row}</div>'
+
+        logos_html += "</div>"
+
+        st.markdown(logos_html, unsafe_allow_html=True)
 
     # --- CONTENIDO PRINCIPAL ---
     if st.session_state.get("selected_page") in ROUTES:

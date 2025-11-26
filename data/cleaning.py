@@ -8,7 +8,7 @@ def filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
     """Filtra un DataFrame por fecha usando la columna 'Marca temporal' (primera columna)."""
     if df.empty or not target_date:
         return df
-    
+
     # Obtener columna de fecha (Marca temporal) - siempre usar la primera columna si no se encuentra explícitamente
     date_col = get_date_column_name(df)
     
@@ -29,7 +29,7 @@ def filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
         if not filtered.empty:
             filtered = filtered.drop(columns=['_normalized_date'])
             return filtered
-    except Exception as e:
+    except Exception:
         # Si hay error en el filtrado, retornar el DataFrame original
         return df
     
