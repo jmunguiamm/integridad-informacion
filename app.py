@@ -765,8 +765,8 @@ def render_analysis_trends_page():
 
 
 def render_neutral_news_page():
-    """Genera una noticia neutral basada en el tema dominante y el contexto del Form 0."""
-    st.markdown("## 📰 Noticia neutral del taller")
+    """Genera un evento ficticio basado en el tema dominante y el contexto del Form 0."""
+    st.markdown("## 📰 Evento ficticio del taller")
 
     st.markdown(
             '<p style="font-size: 1.5rem; font-weight: 500;">A continuación, IA generará una evento ficticio basado en el tema dominante que se identificó en la nube de palabras</strong>.</p>',
@@ -831,7 +831,7 @@ def render_neutral_news_page():
 
     neutral_news = st.session_state.get("neutral_news_text")
     if neutral_news:
-        st.subheader("📄 Última noticia generada")
+        st.subheader("📄 Último evento ficticio generado")
         st.markdown(neutral_news)
 
     st.markdown("---")
@@ -1040,13 +1040,13 @@ def render_news_flow_page():
 
     neutral_story = st.session_state.get("neutral_news_text")
     if not neutral_story:
-        st.warning("Genera primero la noticia neutral para poder crear las versiones con encuadres.")
-        st.caption("Ve a ‘Noticia neutral del taller’, genere la nota base y vuelve aquí.")
+        st.warning("Genera primero el evento ficticio para poder crear las versiones con encuadres.")
+        st.caption("Ve a ‘Evento ficticio del taller’, genera la base y vuelve aquí.")
         generate_disabled = True
 
     if st.button("🔎 Mostrar noticias sobre este tema", type="primary", use_container_width=True, disabled=generate_disabled):
         if generate_disabled:
-            st.warning("Primero completa los pasos anteriores (tema dominante y noticia neutral).")
+            st.warning("Primero completa los pasos anteriores (tema dominante y evento ficticio).")
         else:
             try:
                 with st.spinner("Mostrando noticias con los tres encuadres…"):
@@ -1112,21 +1112,21 @@ def render_news_flow_page():
     )
 
 def render_news_comparison_page():
-    """Visualiza las tres versiones de la noticia para comparar encuadres."""
-    st.markdown("## Noticias 1, 2 y 3")
+    """Visualiza las tres versiones del mensaje para comparar encuadres."""
+    st.markdown("## Mensajes 1, 2 y 3")
 
     news_blocks = st.session_state.get("generated_news_blocks")
     if not news_blocks:
         st.warning("Aún no se han generado las noticias con encuadres. Ve a 'Noticias del taller' y créalas primero.")
         return
 
-    st.caption("1. Creen grupos entre 4-8 personas. <br> En grupo lean nuevamente las noticias y observen cómo cambia la narrativa del mismo hecho. Esto se conoce como encuadre narrativo.")
-    st.caption("2. Discutan e identifiquen el encuadre. <br> Cada noticia fue escrita con un encuadre diferente y en su grupo contarán con tarjetas que describen diferentes encuadres narrativos. Discutan cual corresponde a cada mensaje e identifíquenlas en el cuestionario de manera individual.")
+    st.caption("1. Creen grupos entre 4-8 personas. <br> En grupo lean nuevamente los mensajes y observen cómo cambia la narrativa del mismo hecho. Esto se conoce como encuadre narrativo.")
+    st.caption("2. Discutan e identifiquen el encuadre. <br> Cada mensaje fue escrito con un encuadre diferente y en su grupo contarán con tarjetas que describen diferentes encuadres narrativos. Discutan cuál corresponde a cada mensaje e identifíquenlas en el cuestionario de manera individual.")
     st.markdown("---")
 
-    # Mostrar cada noticia en un desplegable
+    # Mostrar cada mensaje en un desplegable
     for idx, block in enumerate(news_blocks, 1):
-        with st.expander(f"📱 Noticia {idx}", expanded=False):
+        with st.expander(f"📱 Mensaje {idx}", expanded=False):
             _typing_then_bubble(
                 message_text=block.get("text", "(sin contenido)"),
                 image_path=block.get("image"),
@@ -1249,7 +1249,7 @@ def render_conclusion_page():
             3: "Encuadre de miedo y control",
         }
 
-        st.subheader("Respuestas de los encuadres de las noticias del taller")
+        st.subheader("Respuestas de los encuadres de los mensajes del taller")
         chart_columns = st.columns(max(1, len(question_cols)), gap="large")
         summary_details = []
 
@@ -1688,7 +1688,7 @@ ROUTES = {
     "Inicio del taller": render_workshop_start_page,
     "Cuestionario 1": render_form1_page,                          
     "Análisis y tema dominante": render_analysis_trends_page,   
-    "Noticia neutral del taller": render_neutral_news_page,
+    "Evento ficticio del taller": render_neutral_news_page,
     "Cuestionario 2": render_form2_page,                          
     "Noticias del taller": render_news_flow_page,
     "Noticias 1, 2 y 3": render_news_comparison_page,
@@ -1962,13 +1962,13 @@ def main():
                     "Texto de análisis de tema dominante:",
                     analysis_text,
                     "",
-                    "Noticia neutral base:",
+                    "Evento ficticio base:",
                     neutral_news,
                 ]
 
                 for idx, block in enumerate(generated_blocks, 1):
                     summary_parts.append("")
-                    summary_parts.append(f"Noticia {idx} ({block.get('encuadre', 'sin encuadre')}):")
+                    summary_parts.append(f"Mensaje {idx} ({block.get('encuadre', 'sin encuadre')}):")
                     summary_parts.append(block.get("text", "(sin contenido)"))
 
                 summary_parts.extend([
