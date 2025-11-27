@@ -313,8 +313,8 @@ def render_setup_trainer_page():
                 # Actualizar session_state
                 st.session_state.selected_workshop_date = selected_date
                 
-                st.success(f"✅ Taller seleccionado: **{selected_date}**")
-                st.info(f"📊 Todas las páginas mostrarán solo las respuestas del taller del {selected_date}")
+                st.success(f"✅ Taller seleccionado: **{selected_date}**. Todas las siguientes páginas mostrarán datos de ese día.")
+                st.info(f"📊 Para continuar el taller a partir de ahora desplázate con las flechas de la barra lateral.")
             else:
                 st.warning("⚠️ No se encontraron talleres (fechas) en el Form 0. Asegúrate de que haya respuestas en el formulario.")
                 st.session_state.selected_workshop_date = None
@@ -330,13 +330,22 @@ def render_introduction_page():
     import streamlit as st
     import streamlit.components.v1 as components
 
+    # --- CSS para fondo gris de la página ---
+    st.markdown("""
+    <style>
+    .main .block-container {
+        background-color: #f0f4f8 !important;
+        padding: 2rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # --- Apply tighter layout and reset top padding ---
 
     # --- Header and intro text ---
-    st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
+    st.markdown("## 🌎 Registro de un taller.")
 
     # --- Propósito section (orientado a la facilitación) ---
-    st.markdown("### 🧭 💡 Propósito del módulo para facilitación")
     st.markdown("""
         <style>
         .intro-content {
@@ -357,31 +366,19 @@ def render_introduction_page():
     }
     </style>
     <div class="intro-content">
-    Este taller busca a través de la prevención, fortalecer la resistencia cognitiva de las y los participantes y desarrollar herramientas críticas para enfrentar la información errónea que circula en entornos digitales y cotidianos en contextos de seguridad pública.
-    A través de ejercicios simulados, se propone una experiencia activa y reflexiva que aprovecha las experiencias y conocimientos previos para desarrollar a través del pensamiento colectivo un análisis crítico de la información.
-
-    <p><strong>Resultados esperados:</strong></p>
-    <ul>
-        <li>Una mayor conciencia sobre los mecanismos de manipulación informativa.</li>
-        <li>Herramientas prácticas para identificar y cuestionar narrativas engañosas.</li>
-        <li>Fortalecimiento del juicio crítico individual y colectivo.</li>
-    </ul>
+    Registra en el siguiente formulario el taller que vas a realizar. Ten en cuenta que la fecha del taller es obligatoria y el taller debe suceder el día marcado.    
     </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown("""
-        ## 📋 Instrucciones rápidas para la persona facilitadora
-    1️⃣ **Prepara el taller** — Haz clic en el siguiente [enlace de Google Drive](https://drive.google.com/drive/folders/1xcl_-8u5jKtCjzk2af4EI7QhdRBUXVIN?usp=drive_link), descarga los PDFs presentes, imprímelos y llévalos el día del taller.  
-    2️⃣ **Configura el taller** — Haz clic en el botón de siguiente (flecha derecha) en la barra lateral izquierda para acceder a las configuraciones del taller.  
-    3️⃣ **Selecciona la fecha del taller** — Esto servirá para la etapa de análisis de datos.  
-    4️⃣ **Reparte una tarjeta a cada participante** — El identificados de cada participante es el número asignado, así mantenemos los datos anonimizados.  
-    5️⃣ **Comparte el propósito con la audiencia** — Mantén un alto nivel de interactividad durante el taller.  
-    6️⃣ **Disfruta, aprende y comparte**
-    """, unsafe_allow_html=True)
+
 
     # --- Formulario 0 embebido (Paso 1/2 de configuración) ---
     FORM0_URL = _read_secrets("FORM0_URL", "")
     if FORM0_URL:
+        # Botón para volver al inicio
+        if st.button("Ya he registrado el taller. Volver al inicio", use_container_width=True, type="secondary"):
+            st.session_state.current_page = "Inicio"
+            st.rerun()
+        
         st.markdown("### 📝 Preparación: Formulario de registro del taller")
 
         # --- Estilos para el contenedor ---
@@ -434,7 +431,7 @@ def render_workshop_start_page():
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
-        max-width: 900px !important;
+        
     }
     .intro-header {
         text-align: center;
@@ -457,7 +454,7 @@ def render_workshop_start_page():
     st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
     st.markdown(
         '<p style="font-size: 1.5rem; font-weight: 500;">Exploraremos cómo se construyen las noticias, qué emociones nos despiertan y '
-        'cómo podemos identificar desinformación y sesgos informativos.</strong>.</p>',
+        'cómo podemos identificar desinformación y sesgos informativos.</strong></p>',
         unsafe_allow_html=True
         )   
 
@@ -515,8 +512,8 @@ def render_form1_page():
     if FORM1_URL:
         qr = _qr_image_for(FORM1_URL)
         if qr:
-            # Ligeramente desplazado a la derecha pero manteniendo el bloque centrado visualmente
-            left, center, right = st.columns([1.2, 2, 0.8])
+            # Centrado perfecto del código QR
+            left, center, right = st.columns([1, 2, 1])
             with center:
                 st.image(qr, caption="Escanea para abrir Cuestionario 1", width=360)
         st.link_button("📝 Abrir Cuestionario 1", FORM1_URL, use_container_width=True)
@@ -1680,7 +1677,57 @@ def render_workshop_insights_page():
 # 1) Introducción al taller (instrucciones a la persona formadora)
 # 2) Configuraciones (Form 0 + selección de taller)
 # 3) Inicio del taller (pantalla proyectable para todas las personas)
+
+def render_inicio_page():
+    """🏠 Página de inicio con opciones para registrar o iniciar un taller."""
+    # Título
+    st.markdown("# 🧭 Taller de Integridad de la Información")
+    
+    # Introducción
+    st.markdown("""
+    Bienvenido al taller de integridad de la información. Este taller busca fortalecer 
+    la resistencia cognitiva de las y los participantes y desarrollar herramientas críticas 
+    para enfrentar la información errónea que circula en entornos digitales y cotidianos 
+    en contextos de seguridad pública.
+    
+    A través de ejercicios simulados, se propone una experiencia activa y reflexiva que 
+    aprovecha las experiencias y conocimientos previos para desarrollar a través del 
+    pensamiento colectivo un análisis crítico de la información.
+    """)
+    
+    # Estilos CSS para el botón de registro
+    st.markdown("""
+    <style>
+    /* Selector para el botón de registro basado en su posición en la primera columna */
+    div[data-testid="column"]:nth-of-type(1) button[data-testid="baseButton-secondary"],
+    div[data-testid="column"]:first-of-type button[data-testid="baseButton-secondary"] {
+        background-color: #28a745 !important;
+        color: white !important;
+        border-color: #28a745 !important;
+    }
+    div[data-testid="column"]:nth-of-type(1) button[data-testid="baseButton-secondary"]:hover,
+    div[data-testid="column"]:first-of-type button[data-testid="baseButton-secondary"]:hover {
+        background-color: #218838 !important;
+        border-color: #1e7e34 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Botones horizontales
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        if st.button("📝 Registra un taller", use_container_width=True, key="registra_taller", type="secondary"):
+            st.session_state.current_page = "Introducción al taller" 
+            st.rerun()
+    
+    with col2:
+        if st.button("🚀 Inicia un taller", use_container_width=True, key="inicia_taller"):
+            st.session_state.current_page = "Configuraciones"
+            st.rerun()
+
 ROUTES = {
+    "Inicio": render_inicio_page,
     "Introducción al taller": render_introduction_page,           
     "Configuraciones": render_setup_trainer_page,      
     "Inicio del taller": render_workshop_start_page,
@@ -1699,9 +1746,9 @@ def main():
     import base64
     import os
 
-    # --- Estado inicial: abrir en Introducción ---
+    # --- Estado inicial: abrir en Inicio ---
     if "current_page" not in st.session_state:
-        st.session_state.current_page = "Introducción al taller"
+        st.session_state.current_page = "Inicio"
 
     # --- ESTILOS GLOBALES PARA BOTONES (fondo rojo y texto blanco) ---
     st.markdown("""
@@ -1760,6 +1807,20 @@ def main():
     }
     </style>
     """, unsafe_allow_html=True)
+
+    # --- CSS condicional para páginas específicas ---
+    current_page = st.session_state.current_page
+    
+    # CSS condicional para páginas específicas
+    if current_page in ["Introducción al taller"]:
+        st.markdown("""
+        <style>
+        .main .block-container {
+            background-color: #f0f4f8 !important;
+            padding: 2rem !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
     # --- SIDEBAR PERSONALIZADO ---
     with st.sidebar:
@@ -1925,7 +1986,7 @@ def main():
         # --- Botones principales ---
         st.markdown('<div class="sidebar-main-buttons">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", use_container_width=True):
-            st.session_state.current_page = "Introducción al taller"
+            st.session_state.current_page = "Inicio"
             st.rerun()
 
         if st.button("⚙️ Configuraciones", use_container_width=True):
