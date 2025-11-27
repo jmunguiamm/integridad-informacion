@@ -333,10 +333,6 @@ def render_introduction_page():
 
     # --- Header and intro text ---
     st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
-    st.markdown(
-        '<p style="font-size: 1.5rem; font-weight: 500;">Bienvenid@ al módulo de <strong>gestión del Taller de Integridad de la Información</strong>.</p>',
-        unsafe_allow_html=True
-    )
 
     # --- Propósito section (orientado a la facilitación) ---
     st.markdown("### 🧭 💡 Propósito del módulo para facilitación")
@@ -518,7 +514,8 @@ def render_form1_page():
     if FORM1_URL:
         qr = _qr_image_for(FORM1_URL)
         if qr:
-            left, center, right = st.columns([1, 2, 1])
+            # Ligeramente desplazado a la derecha pero manteniendo el bloque centrado visualmente
+            left, center, right = st.columns([1.2, 2, 0.8])
             with center:
                 st.image(qr, caption="Escanea para abrir Cuestionario 1", width=360)
         st.link_button("📝 Abrir Cuestionario 1", FORM1_URL, use_container_width=True)
