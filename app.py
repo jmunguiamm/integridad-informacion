@@ -2045,10 +2045,10 @@ def main():
 
         logos_html += "</div>"
 
-        st.markdown(logos_html, unsafe_allow_html=True)
+        st.sidebar.markdown(logos_html, unsafe_allow_html=True)
 
         # Leyenda sobre los logos
-        st.markdown(
+        st.sidebar.markdown(
             "<div class='sidebar-current'><b>Piloto de asistente para la alfabetización mediática<br/>desarrollada por PNUD México</b></div>",
             unsafe_allow_html=True,
         )
