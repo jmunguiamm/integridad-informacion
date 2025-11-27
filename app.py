@@ -1984,6 +1984,14 @@ def main():
 
         st.markdown("---")
 
+        # Leyenda sobre los logos
+        st.markdown(
+            '<p style="font-size: 0.75rem; text-align: center; color: #6b7280;">'
+            'Esta herramienta es un piloto de un asistente para la alfabetización mediática desarrollada por PNUD México'
+            '</p>',
+            unsafe_allow_html=True,
+        )
+
         # Logos centrados en la parte inferior del sidebar
         logo_path_zac = "images/zacatecas_logo_transparent_precise2.png"
         logo_path_pnud = "images/PNUD_logo.png"
