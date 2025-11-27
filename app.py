@@ -370,20 +370,68 @@ def render_introduction_page():
     </div>
     """, unsafe_allow_html=True)
 
-
     # --- Formulario 0 embebido (Paso 1/2 de configuración) ---
     FORM0_URL = _read_secrets("FORM0_URL", "")
-    if FORM0_URL:
-        # Botón para volver al inicio
-        if st.button("Ya he registrado el taller. Volver al inicio", use_container_width=True, type="secondary"):
-            st.session_state.current_page = "Inicio"
-            st.rerun()
-        
-        st.markdown("### 📝 Preparación: Formulario de registro del taller")
-
-        # --- Estilos para el contenedor ---
-        st.markdown("""
+    
+    # Estilos globales para alinear los botones
+    st.markdown("""
         <style>
+        .buttons-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1em;
+            align-items: stretch;
+        }
+        .button-container {
+            flex: 1;
+            display: flex;
+            align-items: stretch;
+        }
+        .custom-button {
+            background-color: #9ca3af;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75em 1.5em;
+            font-size: 1.1rem;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            min-height: 48px;
+        }
+        .custom-button:hover {
+            background-color: #6b7280;
+        }
+        div[data-testid="column"]:first-child {
+            padding-right: 0.5rem;
+        }
+        div[data-testid="column"]:last-child {
+            padding-left: 0.5rem;
+        }
+        div[data-testid="column"] .stButton {
+            margin-top: 1em !important;
+            width: 100%;
+            height: 100%;
+        }
+        div[data-testid="column"] .stButton>button {
+            background-color: #6c757d !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 0.75em 1.5em !important;
+            font-size: 1.1rem !important;
+            width: 100% !important;
+            margin: 0 !important;
+            min-height: 48px !important;
+        }
+        div[data-testid="column"] .stButton>button:hover {
+            background-color: #5a6268 !important;
+        }
         .form-embed {
             border: 1px solid #ddd;
             border-radius: 12px;
@@ -400,6 +448,23 @@ def render_introduction_page():
         }
         </style>
         """, unsafe_allow_html=True)
+    
+    # Botones en paralelo
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Botón para descargar materiales del taller
+        st.link_button("📥 Descargar materiales del taller", "https://drive.google.com/drive/folders/1s1E5C-qEpVn2fLKJt-YFfj0XnkG6ezAp?usp=sharing", use_container_width=True)
+    
+    with col2:
+        # Botón para volver al inicio
+        if st.button("🏠 Ya he registrado el taller. Volver al inicio", use_container_width=True):
+            st.session_state.current_page = "Inicio"
+            st.rerun()
+    
+    # Formulario embebido (solo si hay FORM0_URL)
+    if FORM0_URL:
+        st.markdown("### 📝 Preparación: Formulario de registro del taller")
 
         # --- Iframe embebido del Formulario 0 ---
         st.markdown(f"""
@@ -496,13 +561,6 @@ def render_workshop_start_page():
 def render_form1_page():
     """Cuestionario 1 – QR y conteo."""
     st.markdown("## ¿Identificas alguna noticia que te haya provocado inseguridad o un sentir negativo en el último año?")
-    st.markdown("""
-        ### 📋 Instrucciones rápidas para la audiencia:
-     Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
-    <br>
-     NOTA: ingresa el número que se te repartio al inicio del taller. 
-    """, unsafe_allow_html=True)
-    
     
     FORM1_URL = _read_secrets("FORM1_URL", "")
     FORMS_SHEET_ID = _forms_sheet_id()
@@ -510,12 +568,22 @@ def render_form1_page():
     SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
     
     if FORM1_URL:
-        qr = _qr_image_for(FORM1_URL)
-        if qr:
-            # Centrado perfecto del código QR
-            left, center, right = st.columns([1, 2, 1])
-            with center:
-                st.image(qr, caption="Escanea para abrir Cuestionario 1", width=360)
+        qr_image_path = "images/Códigos QR/QR Form 1.png"
+        if os.path.exists(qr_image_path):
+            # Dos columnas: texto a la izquierda, imagen a la derecha
+            col_text, col_image = st.columns([1, 1])
+            
+            with col_text:
+                st.markdown("""
+                    ### 📋 Instrucciones rápidas para la audiencia:
+                 Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
+                <br>
+                 **NOTA: Ingresa el número que se te repartio al inicio del taller.**
+                """, unsafe_allow_html=True)
+            
+            with col_image:
+                st.image(qr_image_path, caption="Escanea para abrir Cuestionario 1")
+        
         st.link_button("📝 Abrir Cuestionario 1", FORM1_URL, use_container_width=True)
 
         if st.button("🔄 Actualizar respuestas", use_container_width=True):
@@ -914,22 +982,25 @@ def render_form2_page():
     """Cuestionario 2 — QR y guía para continuar con noticias."""
     st.markdown("## 📲 Cuestionario 2 — reacciones ante noticias")
     
-    st.markdown(
-        '<p style="font-size: 1.5rem; font-weight: 500;">Muy bien, ahora el siguiente paso es que escanees el código QR que te llevará a un formulario. En las pantallas aparecerán 3 mensajes de redes hipotéticos derivados del evento ficticio, pero escritas de forma muy diferente.</p>',
-        unsafe_allow_html=True,
-    )
-   
+    # Layout de dos columnas: texto a la izquierda, imagen QR a la derecha
+    left_col, right_col = st.columns([1, 1])
+    
+    with left_col:
+        st.markdown(
+            '<p style="font-size: 1.5rem; font-weight: 500;">Muy bien, ahora el siguiente paso es que escanees el código QR que te llevará a un formulario.</p>'
+            '<p style="font-size: 1.5rem; font-weight: 500;">En las pantallas aparecerán 3 mensajes de redes hipotéticos derivados del evento ficticio, pero escritas de forma muy diferente.</p>'
+            '<p style="font-size: 1.5rem; font-weight: 700;"><strong>Recuerda identificarte con el número de tarjeta que se te repartió al inicio del taller.</strong></p>',
+            unsafe_allow_html=True,
+        )
+    
+    with right_col:
+        st.image("./images/Códigos QR/QR Form 2.png", caption="Escanea para abrir Cuestionario 2", width=360)
 
     FORM2_URL = _read_secrets("FORM2_URL", "")
     if FORM2_URL:
-        qr = _qr_image_for(FORM2_URL)
-        if qr:
-            left, center, right = st.columns([1, 2, 1])
-            with center:
-                st.image(qr, caption="Escanea para abrir Cuestionario 2", width=360)
         st.link_button("📝 Abrir Cuestionario 2", FORM2_URL, use_container_width=True)
     else:
-        st.warning("Configura FORM2_URL en secrets para mostrar el QR y el enlace.")
+        st.warning("Configura FORM2_URL en secrets para mostrar el enlace.")
     st.markdown("---")
     dom = st.session_state.get("dominant_theme")
     if not dom:
