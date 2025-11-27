@@ -18,25 +18,25 @@ from components.image_repo import select_image_for_story
 
 def generate_news(dominant_theme: str, neutral_story: str | None = None):
     """
-    Genera tres versiones de la noticia neutral aplicando diferentes encuadres narrativos.
+    Genera tres versiones del evento ficticio aplicando diferentes encuadres narrativos.
 
     Args:
         dominant_theme: Tema principal identificado en el taller.
-        neutral_story: Noticia neutral base en formato Markdown/texto.
+        neutral_story: Evento ficticio base en formato Markdown/texto.
 
     Returns:
         list[dict]: [{"encuadre": str, "text": str}, ...]
     """
     client = get_openai_client()
 
-    base_story = (neutral_story or "(Sin noticia neutral generada; describe de forma objetiva el tema dominante)").strip()
+    base_story = (neutral_story or "(Sin evento ficticio generado; describe de forma objetiva el tema dominante)").strip()
 
     prompts = [
         (
             "Desconfianza y responsabilización de actores",
             f"""
 Contexto:
-Esta es la noticia neutral que debes reinterpretar:
+Este es el evento ficticio que debes reinterpretar:
 ---
 {base_story}
 ---
@@ -83,7 +83,7 @@ Ejemplos de noticias con Encuadre de Desconfianza Institucional:
             "Polarización social y exclusión",
             f"""
 Contexto:
-Esta es la noticia neutral que debes reinterpretar:
+Este es el evento ficticio que debes reinterpretar:
 ---
 {base_story}
 ---

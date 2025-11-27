@@ -297,7 +297,7 @@ Reglas:
 - Usa únicamente información derivada de los datos provistos (no inventes).
 - Tono analítico y educativo, claro y sintético.
 - Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
-    - No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
+- No generalices ni produzcas estigmatizaciones, presenta los resultados como exclusivos del grupo
 
     ---
 

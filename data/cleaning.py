@@ -8,7 +8,7 @@ def filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
     """Filtra un DataFrame por fecha usando la columna 'Marca temporal' (primera columna)."""
     if df.empty or not target_date:
         return df
-    
+
     # Obtener columna de fecha (Marca temporal) - siempre usar la primera columna si no se encuentra explícitamente
     date_col = get_date_column_name(df)
     
@@ -29,7 +29,7 @@ def filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
         if not filtered.empty:
             filtered = filtered.drop(columns=['_normalized_date'])
             return filtered
-    except Exception as e:
+    except Exception:
         # Si hay error en el filtrado, retornar el DataFrame original
         return df
     
@@ -175,13 +175,13 @@ def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date:
     # === 3️⃣ Patrones para identificar preguntas del Form2 ===
     patterns = [
         ("¿Qué emociones identificas en ti en reacción a la noticia? (1)", 1, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (1)", 1, "Elementos"),
+        ("¿Cuáles son los elementos de este mensaje que atraen más tu atención? (1)", 1, "Elementos"),
         ("¿Qué tan confiable consideras que es la información contenida en la noticia 1?", 1, "Confianza"),
         ("¿Qué emociones identificas en ti en reacción a la noticia 2?", 2, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (2)", 2, "Elementos"),
+        ("¿Cuáles son los elementos de este mensaje que atraen más tu atención? (2)", 2, "Elementos"),
         ("¿Qué tan confiable consideras que es la información contenida en la noticia 2?", 2, "Confianza"),
         ("¿Qué emociones identificas en ti en reacción a la noticia? (3)", 3, "Emociones"),
-        ("¿Cuáles son los elementos de este mensaje que influyeron más en tu reacción? (3)", 3, "Elementos"),
+        ("¿Cuáles son los elementos de este mensaje que atraen más tu atención? (3)", 3, "Elementos"),
         ("¿Qué tan confiable consideras que es la información contenida en la noticia 3?", 3, "Confianza"),
     ]
     
