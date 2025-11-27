@@ -5,6 +5,7 @@ import re
 import time
 import os
 import difflib
+import base64
 from datetime import datetime
 import pandas as pd
 import streamlit as st
@@ -1771,17 +1772,21 @@ def main():
             padding: 1.2rem 1rem 1rem 1rem;
             display: flex;
             flex-direction: column;
-            justify-content: space-between; /* pushes content and logo apart */
+            justify-content: flex-start; /* content starts from top */
         }
 
         /* Buttons */
         [data-testid="stSidebar"] button {
             border-radius: 10px !important;
             font-weight: 500 !important;
+            font-size: 0.75rem !important;
             margin-bottom: 0.25rem !important;
             border: 1px solid #d8dee4 !important;
             background-color: #ffffff !important;
             color: #004b8d !important;
+        }
+        [data-testid="stSidebar"] button * {
+            font-size: 0.75rem !important;
         }
         [data-testid="stSidebar"] button:disabled {
             background-color: #f2f3f5 !important;
@@ -1794,6 +1799,15 @@ def main():
             background-color: #eaf2f8 !important;
             border-color: #004b8d !important;
         }
+        
+        /* Estilos específicos para botones principales */
+        .sidebar-main-buttons button {
+            font-size: 0.85rem !important;
+            padding: 0.25rem 0.6rem !important;
+        }
+        .sidebar-main-buttons button * {
+            font-size: 0.85rem !important;
+        }
 
         .sidebar-arrow-caption {
             font-size: 0.85rem;
@@ -1805,7 +1819,7 @@ def main():
         .sidebar-current {
             text-align: center;
             color: #555;
-            font-size: 14px;
+            font-size: 16px;
             margin-top: 0.4rem;
             margin-bottom: 0.4rem;
         }
@@ -1816,8 +1830,8 @@ def main():
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            margin-top: auto;        /* empuja el bloque de logos hacia abajo */
-            padding-top: 1rem;
+            padding-top: 0;
+            padding-bottom: 1rem;
             gap: 0.6rem;
         }
         .sidebar-logo img {
@@ -1835,14 +1849,14 @@ def main():
         .sidebar-logo-bottom-row {
             display: flex;
             flex-direction: row;
-            justify-content: space-between;  /* logos a izquierda y derecha */
+            justify-content: center;  /* logos centrados */
             align-items: center;
             gap: 0.6rem;
             width: 100%;
             padding: 0 0.4rem;              /* pequeño margen lateral */
         }
         .sidebar-logo-bottom-row img {
-            max-width: 50%;               /* aún más grandes, ocupan prácticamente media fila cada uno */
+            max-width: 45%;               /* tamaño ajustado para logos centrados */
             max-height: 80px;             /* más altos para darles mayor presencia */
         }
         [data-testid="stSidebar"] button[kind="primary"] {
@@ -1860,8 +1874,56 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
+        # --- Logos y mensaje al inicio del sidebar ---
+        # Logos centrados en la parte superior del sidebar
+        logo_path_zac = "images/zacatecas_logo_transparent_precise2.png"
+        logo_path_pnud = "images/PNUD_logo.png"
+        logo_path_ponle = "images/Logo PonleFiltro.png"
 
+        logos_html = '<div class="sidebar-logo">'
+
+        # Fila superior: Gobierno de Zacatecas
+        if os.path.isfile(logo_path_zac):
+            with open(logo_path_zac, "rb") as f:
+                logo_zac_b64 = base64.b64encode(f.read()).decode()
+            logos_html += (
+                f'<img class="sidebar-logo-main" '
+                f'src="data:image/png;base64,{logo_zac_b64}" '
+                f'alt="Logo Gobierno de Zacatecas">'
+            )
+
+        # Fila inferior: PNUD (izquierda) y Ponle Filtro (derecha)
+        bottom_row = ""
+        if os.path.isfile(logo_path_pnud):
+            with open(logo_path_pnud, "rb") as f:
+                logo_pnud_b64 = base64.b64encode(f.read()).decode()
+            bottom_row += (
+                f'<img src="data:image/png;base64,{logo_pnud_b64}" alt="Logo PNUD">'
+            )
+
+        if os.path.isfile(logo_path_ponle):
+            with open(logo_path_ponle, "rb") as f:
+                logo_ponle_b64 = base64.b64encode(f.read()).decode()
+            bottom_row += (
+                f'<img src="data:image/png;base64,{logo_ponle_b64}" alt="Logo Ponle Filtro">'
+            )
+
+        if bottom_row:
+            logos_html += f'<div class="sidebar-logo-bottom-row">{bottom_row}</div>'
+
+        logos_html += "</div>"
+
+        st.markdown(logos_html, unsafe_allow_html=True)
+
+        # Leyenda sobre los logos
+        st.markdown(
+            "<div class='sidebar-current'><b>Piloto de asistente para la alfabetización mediática<br/>desarrollada por PNUD México</b></div>",
+            unsafe_allow_html=True,
+        )
+
+       
         # --- Botones principales ---
+        st.markdown('<div class="sidebar-main-buttons">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", use_container_width=True):
             st.session_state.current_page = "Introducción al taller"
             st.rerun()
@@ -1869,16 +1931,15 @@ def main():
         if st.button("⚙️ Configuraciones", use_container_width=True):
             st.session_state.current_page = "Configuraciones"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
 
-        st.markdown("---")
-
+        
         # Mostrar la página actual
         st.markdown(
             f"<div class='sidebar-current'>Página actual:<br><b>{st.session_state.current_page}</b></div>",
             unsafe_allow_html=True
         )
-
-        st.markdown("---")
 
         page_keys = list(ROUTES.keys())
         try:
@@ -1978,56 +2039,6 @@ def main():
 
         else:
             st.warning("Página actual fuera del flujo del taller.")
-
-        st.markdown("---")
-
-        # Leyenda sobre los logos
-        st.markdown(
-            '<p style="font-size: 0.75rem; text-align: center; color: #6b7280;">'
-            'Esta herramienta es un piloto de un asistente para la alfabetización mediática desarrollada por PNUD México'
-            '</p>',
-            unsafe_allow_html=True,
-        )
-
-        # Logos centrados en la parte inferior del sidebar
-        logo_path_zac = "images/zacatecas_logo_transparent_precise2.png"
-        logo_path_pnud = "images/PNUD_logo.png"
-        logo_path_ponle = "images/Logo PonleFiltro.png"
-
-        logos_html = '<div class="sidebar-logo">'
-
-        # Fila superior: Gobierno de Zacatecas
-        if os.path.isfile(logo_path_zac):
-            with open(logo_path_zac, "rb") as f:
-                logo_zac_b64 = base64.b64encode(f.read()).decode()
-            logos_html += (
-                f'<img class="sidebar-logo-main" '
-                f'src="data:image/png;base64,{logo_zac_b64}" '
-                f'alt="Logo Gobierno de Zacatecas">'
-            )
-
-        # Fila inferior: PNUD (izquierda) y Ponle Filtro (derecha)
-        bottom_row = ""
-        if os.path.isfile(logo_path_pnud):
-            with open(logo_path_pnud, "rb") as f:
-                logo_pnud_b64 = base64.b64encode(f.read()).decode()
-            bottom_row += (
-                f'<img src="data:image/png;base64,{logo_pnud_b64}" alt="Logo PNUD">'
-            )
-
-        if os.path.isfile(logo_path_ponle):
-            with open(logo_path_ponle, "rb") as f:
-                logo_ponle_b64 = base64.b64encode(f.read()).decode()
-            bottom_row += (
-                f'<img src="data:image/png;base64,{logo_ponle_b64}" alt="Logo Ponle Filtro">'
-            )
-
-        if bottom_row:
-            logos_html += f'<div class="sidebar-logo-bottom-row">{bottom_row}</div>'
-
-        logos_html += "</div>"
-
-        st.markdown(logos_html, unsafe_allow_html=True)
 
     # --- CONTENIDO PRINCIPAL ---
     if st.session_state.get("selected_page") in ROUTES:
