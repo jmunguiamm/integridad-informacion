@@ -577,7 +577,6 @@ def render_form1_page():
                 st.markdown("""
                     ### 📋 Instrucciones rápidas para la audiencia:
                  Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
-                <br>
                  **NOTA: Ingresa el número que se te repartio al inicio del taller.**
                 """, unsafe_allow_html=True)
             
@@ -954,7 +953,7 @@ Formato de salida esperado:
 """
         try:
             client = _openai_client()
-            with st.spinner("🧠 Mostrando noticia neutral con IA…"):
+            with st.spinner("🧠 Mostrando evento ficticio con IA…"):
                     resp = client.chat.completions.create(
                         model="gpt-4o-mini",
                     temperature=0.35,
@@ -970,15 +969,15 @@ Formato de salida esperado:
             news_text = resp.choices[0].message.content.strip()
             st.session_state["neutral_news_text"] = news_text
             _log_debug_message(
-                "Noticia neutral generada correctamente.",
+                "Evento ficticio listo.",
                 level="success",
                 context="Noticia neutral",
             )
             st.markdown(news_text)
         except Exception as e:
-            st.error(f"No pude generar la noticia neutral automáticamente: {e}")
+            st.error(f"No pude generar el evento ficticio automáticamente: {e}")
 
-    st.caption("Puedes volver a generar la noticia si necesitas otra versión. Usa las flechas de la barra lateral para continuar.")
+    st.caption("Puedes volver a generar el evento ficticio si necesitas otra versión. Usa las flechas de la barra lateral para continuar.")
 
 
 def render_form2_page():
@@ -1199,8 +1198,8 @@ def render_news_comparison_page():
         st.warning("Aún no se han generado las noticias con encuadres. Ve a 'Noticias del taller' y créalas primero.")
         return
 
-    st.caption("1. Creen grupos entre 4-8 personas. <br> En grupo lean nuevamente los mensajes y observen cómo cambia la narrativa del mismo hecho. Esto se conoce como encuadre narrativo.")
-    st.caption("2. Discutan e identifiquen el encuadre. <br> Cada mensaje fue escrito con un encuadre diferente y en su grupo contarán con tarjetas que describen diferentes encuadres narrativos. Discutan cuál corresponde a cada mensaje e identifíquenlas en el cuestionario de manera individual.")
+    st.caption("1. Creen grupos entre 4-8 personas. En grupo lean nuevamente los mensajes y observen cómo cambia la narrativa del mismo hecho. Esto se conoce como encuadre narrativo.")
+    st.caption("2. Discutan e identifiquen el encuadre. Cada mensaje fue escrito con un encuadre diferente y en su grupo contarán con tarjetas que describen diferentes encuadres narrativos. Discutan cuál corresponde a cada mensaje e identifíquenlas en el cuestionario de manera individual.")
     st.markdown("---")
 
     # Mostrar cada mensaje en un desplegable
@@ -1223,11 +1222,11 @@ def render_explanation_page():
     
     st.subheader("Hilo Conductor")
     st.markdown(
-            '<p style="font-size: 1.5rem; font-weight: 300;">Sabías que existen factores cognitivos, sociales y emocionales que influyen directamente en la aceptación de la información falsa, incompleta o nociva? En este ejercicio de prevención, lo que hicimos fue exponernos a mensajes que estaban enmarcados con narraciones intencionales, las cuales se identifican como marcos narrativos, estos emplean técnicas de lenguaje con el propósito de impactar las emociones y percepciones de las personas.</strong>.</p>',
+            '<p style="font-size: 1.5rem; font-weight: 300;">Sabías que existen factores cognitivos, sociales y emocionales que influyen directamente en la aceptación de la información falsa, incompleta o nociva? En este ejercicio de prevención, lo que hicimos fue exponernos a mensajes que estaban enmarcados con narraciones intencionales, las cuales se identifican como marcos narrativos, estos emplean técnicas de lenguaje con el propósito de impactar las emociones y percepciones de las personas</strong>.</p>',
             unsafe_allow_html=True
             )  
     st.markdown(
-            '<p style="font-size: 1.5rem; font-weight: 300;">En la siguiente pantalla analizaremos los impactos de los marcos narrativos en las emociones y la percepción de confianza.</strong>.</p>',
+            '<p style="font-size: 1.5rem; font-weight: 300;">En la siguiente pantalla analizaremos los impactos de los marcos narrativos en las emociones y la percepción de confianza</strong>.</p>',
             unsafe_allow_html=True
             )  
             
