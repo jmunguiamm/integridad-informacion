@@ -519,7 +519,7 @@ def render_workshop_start_page():
     st.markdown("## 🌎 Te damos la bienvenida al taller de integridad de la información.")
     st.markdown(
         '<p style="font-size: 1.5rem; font-weight: 500;">Exploraremos cómo se construyen las noticias, qué emociones nos despiertan y '
-        'cómo podemos identificar desinformación y sesgos informativos.</strong></p>',
+        'cómo podemos identificar información errónea y sesgos informativos.</strong></p>',
         unsafe_allow_html=True
         )   
 
@@ -683,7 +683,7 @@ def render_analysis_trends_page():
     #  :
     analysis_prompt = f"""
     Actúa como un **analista de datos cualitativos experto en comunicación social, seguridad y percepción pública**. 
-    Tu tarea es interpretar información proveniente de talleres educativos sobre integridad de la información, desinformación y emociones sociales.
+    Tu tarea es interpretar información proveniente de talleres educativos sobre integridad de la información, información errónea y emociones sociales.
 
     Dispones de dos fuentes de entrada:
 
@@ -903,7 +903,10 @@ def render_neutral_news_page():
         # Preparar contexto de fecha y ubicación
         contexto_fecha = ""
         if fecha_implementacion:
-            contexto_fecha = f"- El hecho debe haber ocurrido alrededor de la fecha de implementación del taller: {fecha_implementacion}."
+            contexto_fecha = (
+                f"- El hecho debe haber ocurrido dentro del mes previo a la fecha de implementación del taller "
+                f"({fecha_implementacion}). No utilices fechas anteriores a ese rango."
+            )
         
         # Construir contexto de ubicación de forma flexible
         if municipio and estado:
@@ -927,7 +930,7 @@ Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado
 El texto debe:
 
 - Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
-{contexto_fecha}
+- Mantener la cronología dentro del rango indicado: {contexto_fecha}
 - Estar contextualizado en {contexto_ubicacion}
 - Mantener una **estructura noticiosa clásica**:
   - **Título factual y conciso.**
@@ -1065,8 +1068,9 @@ def _parse_news_blocks(raw: str):
         t = re.sub(r'\*{1,2}(?!\S)|(?<!\S)\*{1,2}', '', t)
         t = re.sub(r'(?i)^\*\*noticia compartida en whatsapp\*\*\s*:?', '', t).strip()
         # Eliminar encabezado tipo "Encuadre X:"
-        t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()  # elimina "Encuadre 1:", "Encuadre 2:", etc.    
-
+        t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()  # elimina "Encuadre 1:", "Encuadre 2:", etc.
+        t = re.sub(r'(?i)^mensajes?\s*\d+\s*:?', '', t).strip()  # elimina "Mensaje 1:", etc.
+        t = re.sub(r'^/\d+\s*', '', t).strip()  # elimina tokens como "/1" al inicio
         
         # Eliminar líneas que son solo hashtags o encabezados markdown
         lines = [ln for ln in t.splitlines() if ln.strip()]
@@ -1152,11 +1156,11 @@ def render_news_flow_page():
         if raw:
             stories = _parse_news_blocks(raw)
         else:
-            st.info("Haz clic en el botón superior para generar las noticias basadas en el tema dominante.")
-        return
+            st.info("Haz clic en el botón superior para generar los mensajes basados en el tema dominante.")
+            return
 
     if not stories:
-        st.warning("No se pudieron interpretar noticias desde el texto generado.")
+        st.warning("No se pudieron interpretar mensajes desde el texto generado.")
         return
 
     idx = int(st.session_state.get("news_index", 0))
@@ -1164,15 +1168,24 @@ def render_news_flow_page():
         idx = 0
         st.session_state.news_index = 0
 
-    encuadres = [story.get("encuadre") or f"Encuadre {i+1}" for i, story in enumerate(stories)]
-    if idx < len(encuadres):
-        st.caption(f"Encuadre: {encuadres[idx]}")
+    st.caption(f"Mensaje {idx + 1}")
 
     story = stories[idx]
-    story_dict = story if isinstance(story, dict) else {"text": story.get("text") if hasattr(story, "get") else story, "image": story.get("image") if hasattr(story, "get") else None, "encuadre": story.get("encuadre") if hasattr(story, "get") else None}
+    story_text_raw = story.get("text", "") if isinstance(story, dict) else str(story)
+
+    # Limpiar tokens residuales como '/1', '/2', etc., al inicio de cada línea
+    story_text = "\n".join(
+        [re.sub(r"^/\d+\s*", "", line.strip()) for line in story_text_raw.splitlines()]
+    ).strip()
+
+    story_dict = story if isinstance(story, dict) else {
+        "text": story_text,
+        "image": story.get("image") if hasattr(story, "get") else None,
+        "encuadre": story.get("encuadre") if hasattr(story, "get") else None,
+    }
 
     _typing_then_bubble(
-        message_text=story_dict.get("text", ""),
+        message_text=story_dict.get("text", story_text),
         image_path=story_dict.get("image"),
         encuadre=None,
     )

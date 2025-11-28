@@ -19,7 +19,7 @@ def analyze_reactions(df_all, key):
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
     prompt = f"""
-    Eres un analista de talleres educativos sobre desinformación.
+    Eres un analista de talleres educativos sobre información errónea.
 
     Tienes datos combinados de tres formularios:
     - [Form 0] Contexto del grupo y del docente.
