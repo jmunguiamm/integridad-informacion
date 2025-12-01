@@ -176,15 +176,25 @@ def get_workshop_options():
             axis=1
         )
 
+        municipio_col = None
+        for col in df0.columns:
+            if 'municipio' in col.strip().lower():
+                municipio_col = col
+                break
+
         options = []
         for _, row in df0.iterrows():
             normalized_date = row['_normalized_date']
             code = row['_workshop_code']
             label = f"{_human_date(normalized_date)} · Número del taller {code}"
+            municipio_value = None
+            if municipio_col and municipio_col in row and pd.notna(row[municipio_col]):
+                municipio_value = str(row[municipio_col]).strip()
             options.append({
                 "date": normalized_date,
                 "code": code,
                 "label": label,
+                "municipio": municipio_value,
             })
 
         options.sort(key=lambda opt: opt["date"] or "", reverse=True)

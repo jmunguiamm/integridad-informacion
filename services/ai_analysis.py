@@ -174,58 +174,58 @@ def analyze_final_report(
     prompt = f"""
     Contexto:
         Se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento,
-cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando,
-para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y
-(c) elementos clave que llamaron su atención.
+    cada una con un encuadre narrativo distinto. Los participantes completaron un formulario indicando,
+    para cada noticia: (a) emociones que sienten al leerla, (b) grado de confiabilidad percibida y
+    (c) elementos clave que llamaron su atención.
 
-Rol:
-Eres un analista senior en ciencia de datos y visualización. Debes construir un informe profundo y accionable
-por cada taller registrado, articulando los hallazgos con el tema dominante y el contexto narrativo de las noticias generadas.
+    Rol:
+    Eres un analista senior en ciencia de datos y visualización. Debes construir un informe profundo y accionable
+    por cada taller registrado, articulando los hallazgos con el tema dominante y el contexto narrativo de las noticias generadas.
 
-Insumos clave del taller:
-- Tema dominante (derivado del análisis previo): "{dominant_theme}"
-- Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
-- Noticias generadas (encuadre + texto):
-{news_block_txt}
-"
-- Datos normalizados de respuestas (CSV; columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor):
-{csv_preview}
+    Insumos clave del taller:
+    - Tema dominante (derivado del análisis previo): "{dominant_theme}"
+    - Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+    - Noticias generadas (encuadre + texto):
+    {news_block_txt}
+    "
+    - Datos normalizados de respuestas (CSV; columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor):
+    {csv_preview}
 
-Metodología de análisis requerida:
-1) Trabaja taller por taller: identifica cada valor único de "Taller" y sintetiza las particularidades del grupo.
-2) Describe cómo las emociones, la confianza y los elementos clave varían según encuadre dentro de cada taller.
-3) Relaciona explícitamente los resultados con el tema dominante y con los fragmentos narrativos de las noticias; menciona coincidencias y tensiones.
-4) Analiza diferencias relevantes por género dentro de cada taller y compara entre talleres si emergen contrastes significativos.
-5) Destaca patrones transversales, correlaciones o sesgos latentes que surjan al cruzar las variables (incluyendo género, encuadre y valores reportados), señalando posibles riesgos o oportunidades del taller.
-6) Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
+    Metodología de análisis requerida:
+    1) Trabaja taller por taller: identifica cada valor único de "Taller" y sintetiza las particularidades del grupo.
+    2) Describe cómo las emociones, la confianza y los elementos clave varían según encuadre dentro de cada taller.
+    3) Relaciona explícitamente los resultados con el tema dominante y con los fragmentos narrativos de las noticias; menciona coincidencias y tensiones.
+    4) Analiza diferencias relevantes por género dentro de cada taller y compara entre talleres si emergen contrastes significativos.
+    5) Destaca patrones transversales, correlaciones o sesgos latentes que surjan al cruzar las variables (incluyendo género, encuadre y valores reportados), señalando posibles riesgos o oportunidades del taller.
+    6) Si los datos de un taller o variable son insuficientes, indícalo antes de extraer conclusiones.
 
-Objetivo del análisis (entregar texto + un gráfico explicativo por cada punto):
-1) Cómo varían las emociones, el nivel de confianza y los componentes clave según el tipo de encuadre narrativo.
-2) Diferencias de percepción y reacción emocional a las noticias según el género.
-3) Patrones emergentes y relaciones significativas entre variables; a partir de ellos, identifica sesgos posibles que no se hayan abordado en los análisis por encuadre y por género.
+    Objetivo del análisis (entregar texto + un gráfico explicativo por cada punto):
+    1) Cómo varían las emociones, el nivel de confianza y los componentes clave según el tipo de encuadre narrativo.
+    2) Diferencias de percepción y reacción emocional a las noticias según el género.
+    3) Patrones emergentes y relaciones significativas entre variables; a partir de ellos, identifica sesgos posibles que no se hayan abordado en los análisis por encuadre y por género.
 
-Formato de salida:
-Devuelve **Markdown estructurado**, con secciones claras. Dentro de cada sección, menciona explícitamente los aprendizajes por taller (usa subtítulos o párrafos separados para cada taller cuando corresponda):
-## Variación por encuadre
-- Texto analítico sintético (2–4 párrafos).
-## Diferencias por género
-- Texto analítico sintético (2–3 párrafos).
-## Patrones y sesgos emergentes
-- Texto analítico (2–4 párrafos), señalando relaciones y sesgos potenciales derivados de las respuestas.
+    Formato de salida:
+    Devuelve **Markdown estructurado**, con secciones claras. Dentro de cada sección, menciona explícitamente los aprendizajes por taller (usa subtítulos o párrafos separados para cada taller cuando corresponda):
+    ## Variación por encuadre
+    - Texto analítico sintético (2–4 párrafos).
+    ## Diferencias por género
+    - Texto analítico sintético (2–3 párrafos).
+    ## Patrones y sesgos emergentes
+    - Texto analítico (2–4 párrafos), señalando relaciones y sesgos potenciales derivados de las respuestas.
 
-Reglas de estilo tipográfico (alineadas con la interfaz):
-- Usa encabezados y subtítulos siguiendo la jerarquía Markdown indicada.
-- Redacta los párrafos en un tono analítico, con frases completas y claras.
-- Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
-- Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
-- Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
+    Reglas de estilo tipográfico (alineadas con la interfaz):
+    - Usa encabezados y subtítulos siguiendo la jerarquía Markdown indicada.
+    - Redacta los párrafos en un tono analítico, con frases completas y claras.
+    - Formatea listas con guiones simples (`-`). Evita listas numeradas salvo que aporten claridad.
+    - Resalta conceptos clave con **negritas** cuando sea necesario, sin abusar del formato.
+    - Mantén la longitud de los párrafos entre 2 y 4 oraciones para facilitar la lectura.
 
-Reglas:
-- Usa únicamente información derivada de los datos provistos (no inventes).
-- Tono analítico y educativo, claro y sintético.
-- No incluyas código en la respuesta; solo recomendaciones de visualización y narrativa.
-- Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
-"""
+    Reglas:
+    - Usa únicamente información derivada de los datos provistos (no inventes).
+    - Tono analítico y educativo, claro y sintético.
+    - No incluyas código en la respuesta; solo recomendaciones de visualización y narrativa.
+    - Si un análisis no es concluyente por falta de datos, indícalo explícitamente.
+    """
 
     client = get_openai_client()
     with st.spinner("📊 Generando análisis final con IA…"):
@@ -262,6 +262,10 @@ def analyze_emotions_json(df_all, dominant_theme: str, form0_context_text: str):
 
     news_block_txt = _get_generated_news_text()
 
+    workshop_code = st.session_state.get("selected_workshop_code", "sin_codigo")
+
+    workshop_code = st.session_state.get("selected_workshop_code", "sin_codigo")
+
     prompt = f"""
 Contexto:
 Dentro del taller de integridad de la información se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. 
@@ -272,6 +276,7 @@ Eres un analista en ciencia de datos que trabaja con los datos para generar preg
 Insumos clave del taller:
 - Tema dominante (derivado del análisis previo): "{dominant_theme}"
 - Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
+- Número del taller (código único): "{workshop_code}"
 - Noticias generadas (encuadre + texto): {news_block_txt}
 - Tipos de encuadre narrativo: 
 - Encuadres narrativos: "Encuadre de desconfianza y responsabilización de actores:
@@ -305,7 +310,7 @@ Reglas:
     {{
       "workshops": [
         {{
-          "taller": "<nombre o código>",
+          "taller": "{workshop_code}",
           "emociones_por_encuadre": {{
             "Desconfianza y responsabilización de actores": ["emocion1", "emocion2"],
             "Polarización social y exclusión": ["emocion1", "emocion2"],
@@ -347,6 +352,8 @@ def analyze_gender_impacts_json(df_all, dominant_theme: str, form0_context_text:
 
     news_block_txt = _get_generated_news_text()
 
+    workshop_code = st.session_state.get("selected_workshop_code", "sin_codigo")
+
     prompt = f"""
 Contexto:
 Dentro del taller de integridad de la información se ha realizado un ejercicio donde se generaron tres noticias diferentes sobre un mismo evento, cada una con un encuadre narrativo distinto. 
@@ -358,6 +365,7 @@ Eres un analista en ciencia de datos que trabaja con los datos para generar aná
 Insumos clave del taller:
 - Tema dominante: "{dominant_theme}"
 - Contexto Form 0: "{(form0_context_text or '').strip()}"
+- Número del taller (código único): "{workshop_code}"
 - Tipos de encuadre narrativo: 
 - Encuadres narrativos: "Encuadre de desconfianza y responsabilización de actores:
     Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
@@ -389,7 +397,7 @@ Metodología de análisis requerida:
     {{
       "analisis_genero": [
         {{
-          "taller": "<código>",
+          "taller": "{workshop_code}",
           "patrones_por_genero": {{
             "Femenino": "<síntesis de emociones y confianza>",
             "Masculino": "<síntesis de emociones y confianza>",
@@ -430,6 +438,7 @@ def analyze_general_json(df_all, dominant_theme: str, form0_context_text: str):
     sample_txt = "\n".join([f"{i+1}) {row}" for i, row in enumerate(sample)])
 
     news_block_txt = _get_generated_news_text()
+    workshop_code = st.session_state.get("selected_workshop_code", "sin_codigo")
 
     prompt = f"""
 Contexto:
@@ -443,6 +452,7 @@ Insumos clave del taller:
 - Tema dominante (derivado del análisis previo): "{dominant_theme}"
 - Contexto Form 0 (resumen/fragmento): "{(form0_context_text or '').strip()}"
 - Noticias generadas (encuadre + texto): {news_block_txt}
+- Número del taller (código único): "{workshop_code}"
 - Tipos de encuadre narrativo: 
 Encuadre de desconfianza y responsabilización de actores:
 Cuestiona la legitimidad institucional o mediática, genera incertidumbre y cinismo ciudadano, e influye en la percepción pública sobre quién tiene la culpa o el mérito, atribuyendo causas o soluciones a actores específicos (individuos, instituciones, grupos). Utiliza lenguaje causal (“por”, “debido a”, “por culpa de”) para responsabilizar, culpar o exigir, orientando la desconfianza hacia instituciones cuya imparcialidad o transparencia se pone en duda. Recurre a reclamos generalizados como “todos son corruptos”, “nunca dicen la verdad”, “siempre lucran con nuestra confianza”, y a referencias de traición. Suele deslegitimar fuentes oficiales o periodísticas, justificando que están cooptadas o manipuladas, y emplea recursos gráficos como emojis escépticos o de advertencia (🤔 😒 ⚠️ 👀), signos de sospecha o ironía (“¿?”, “…” y “—”), además de mayúsculas parciales o exclamaciones para expresar hartazgo y desconfianza. También puede reforzar la rendición de cuentas o la culpabilización.
@@ -482,6 +492,7 @@ Reglas:
     📄 Formato JSON:
     {{
       "resumen_general": {{
+        "taller": "{workshop_code}",
         "patrones_transversales": "<síntesis en 3–5 oraciones>",
         "sesgos_identificados": ["<sesgo1>", "<sesgo2>"],
         "hallazgos_clave": "<resumen de 4 líneas>"

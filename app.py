@@ -29,7 +29,7 @@ from services.ai_analysis import (
     analyze_general_json
 )
 
-from services.news_generator import generate_news
+from services.news_generator import generate_news, generate_neutral_event
 from components.image_repo import get_images_for_dominant_theme
 
 
@@ -499,6 +499,45 @@ def render_introduction_page():
 
         st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
 
+    # --- Resumen descargable del taller ---
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    workshop_options = _get_workshop_options()
+    if workshop_options:
+        st.subheader("📄 Descarga el resumen del número de taller")
+        workshop_code = st.session_state.get("selected_workshop_code")
+
+        def _format_date_ddmmaaaa(date_str: str | None) -> str:
+            if not date_str:
+                return ""
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+            except Exception:
+                return date_str
+
+        summary_df = pd.DataFrame([
+            {
+                "Número de taller": opt["code"],
+                "Fecha (dd-mm-aaaa)": _format_date_ddmmaaaa(opt.get("date")),
+                "Municipio": opt.get("municipio") or "Sin municipio",
+                "Etiqueta": opt["label"],
+            }
+            for opt in workshop_options
+            if not workshop_code or opt["code"] == workshop_code
+        ])
+
+        summary_csv = summary_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="⬇️ Descargar resumen (CSV)",
+            data=summary_csv,
+            file_name="resumen_talleres.csv",
+            mime="text/csv",
+            help="Incluye la fecha, lugar y número de cada taller disponible."
+        )
+    else:
+        st.info("El resumen estará disponible cuando haya talleres registrados en Form 0.")
+
     # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
@@ -541,12 +580,12 @@ def render_workshop_start_page():
         unsafe_allow_html=True
         )   
 
-    workshop_code = _current_workshop_code()
-    if workshop_code:
-        st.success(f"Número del taller: `{workshop_code}`")
-        st.caption("Comparte este número con todas las personas participantes; lo ingresarán en los formularios.")
-    else:
-        st.warning("Número del taller pendiente. Ve a 'Configuraciones' para seleccionarlo.")
+    #workshop_code = _current_workshop_code()
+    #if workshop_code:
+    #    st.success(f"Número del taller: `{workshop_code}`")
+    #    st.caption("Comparte este número con todas las personas participantes; lo ingresarán en los formularios.")
+    #else:
+    #      st.warning("Número del taller pendiente. Ve a 'Configuraciones' para seleccionarlo.")
 
     # Breve estructura pensada para proyectar
     st.markdown("### 🧭 💡 Propósito del taller")
@@ -599,11 +638,28 @@ def render_form1_page():
             col_text, col_image = st.columns([1, 1])
             
             with col_text:
-                st.markdown("""
+                workshop_code = _current_workshop_code()
+                code_text = (
+                    f"""<p style='margin-top:0.75rem;color:#1f2937;'>
+                        <strong>Número del taller:</strong>
+                        <span style='display:inline-block;font-size:2rem;color:#0f172a;margin:0.3rem 0;'>
+                            {workshop_code}
+                        </span><br/>
+                        Escribe este número en la pregunta <em>“Ingresa el número de taller”</em> del formulario.
+                        </p>"""
+                    if workshop_code else
+                    "<p><strong>Número del taller pendiente.</strong> Ve a 'Configuraciones' para seleccionarlo.</p>"
+                )
+                st.markdown(
+                    f"""
                     ### 📋 Instrucciones rápidas para la audiencia:
-                 Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
-                 **NOTA: Ingresa el número que se te repartio al inicio del taller.**
-                """, unsafe_allow_html=True)
+                    Escanea el código QR y compártenos tu experiencia en el formulario, tu información es anónima.
+                    <br>
+                    **NOTA: Ingresa el número que se te repartió al inicio del taller.**
+                    {code_text}
+                    """,
+                    unsafe_allow_html=True,
+                )
             
             with col_image:
                 st.image(qr_image_path, caption="Escanea para abrir Cuestionario 1")
@@ -612,15 +668,6 @@ def render_form1_page():
 
         if st.button("🔄 Actualizar respuestas", use_container_width=True):
             st.rerun()
-
-    workshop_code = _current_workshop_code()
-    if workshop_code:
-        st.info(
-            f"Número del taller: `{workshop_code}`. Indica a la audiencia que lo escriba en la pregunta "
-            "'Ingresa el número de taller' dentro del formulario."
-        )
-    else:
-        st.warning("Número del taller no disponible aún. Ve a 'Configuraciones' para seleccionarlo.")
 
     if not (FORMS_SHEET_ID and FORM1_TAB and SA):
         st.info("Configura credenciales para ver conteo.")
@@ -873,11 +920,6 @@ def render_neutral_news_page():
                 unsafe_allow_html=True
                 )  
     
-    OPENAI = _read_secrets("OPENAI_API_KEY", "")
-    if not OPENAI:
-        st.error("Configura la clave OPENAI_API_KEY en secrets para generar la noticia.")
-        return
-
     dominant_theme = st.session_state.get("dominant_theme")
     if not dominant_theme:
         st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
@@ -932,81 +974,17 @@ def render_neutral_news_page():
 
     st.markdown("---")
 
-    if st.button("✍️ Mostrar noticia neutral", type="primary", use_container_width=True):
-        # Preparar contexto de fecha y ubicación
-        contexto_fecha = ""
-        if fecha_implementacion:
-            contexto_fecha = (
-                f"- El hecho debe haber ocurrido dentro del mes previo a la fecha de implementación del taller "
-                f"({fecha_implementacion}). No utilices fechas anteriores a ese rango."
-            )
-        
-        # Construir contexto de ubicación de forma flexible
-        if municipio and estado:
-            contexto_ubicacion = f"el municipio de {municipio}, {estado}"
-        elif municipio:
-            contexto_ubicacion = f"el municipio de {municipio}"
-        elif estado:
-            contexto_ubicacion = f"el estado de {estado}"
-        else:
-            contexto_ubicacion = "la región correspondiente"
-        
-        prompt = f"""
-    Contexto general:
-En un ejercicio previo, se identificaron los tópicos dominantes {dominant_theme} y las emociones asociadas que generan percepciones de inseguridad según las respuestas del [formulario 1]. Con base en esos hallazgos, se elaboró una nube de palabras que refleja los temas y emociones predominantes.
-
-Rol:
-Eres reportero de un medio independiente mexicano (por ejemplo, Animal Político, Aristegui Noticias, Proceso o Nexos). Debes redactar una **noticia breve, objetiva y verificable**, como si fuera una nota de crónica informativa publicada hoy.
-
-Instrucción:
-Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado con el tema dominante {dominant_theme}.
-El texto debe:
-
-- Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
-- Mantener la cronología dentro del rango indicado: {contexto_fecha}
-- Estar contextualizado en {contexto_ubicacion}
-- Mantener una **estructura noticiosa clásica**:
-  - **Título factual y conciso.**
-  - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
-  - **Segundo párrafo:** detalles del hecho (acciones de autoridades, testigos, contexto inmediato).
-  - **Tercer párrafo:** contexto breve (por qué es relevante o cómo se relaciona con el tema dominante).
-- Evitar cualquier tono analítico, especulativo o explicativo.
-- No usar expresiones como “según expertos”, “se ha observado”, o “el fenómeno refleja”.
-- Permitir solo menciones genéricas a fuentes (“de acuerdo con reportes oficiales”, “autoridades locales informaron”).
-- Utilizar oraciones cortas, lenguaje informativo y directo.
-
-Estilo:
-- Periodismo mexicano independiente, tono sobrio y neutral.
-- Sin adjetivos, juicios, análisis ni interpretaciones.
-- Prioriza la precisión y la claridad.
-- Longitud aproximada: **100 a 150 palabras**.
-
-Formato de salida esperado:
-[Título de la noticia]
-[Cuerpo de 1 a 2 párrafos breves, estilo nota informativa]
-"""
+    if st.button("✍️ Mostrar evento ficticio", type="primary", use_container_width=True):
         try:
-            client = _openai_client()
-            with st.spinner("🧠 Mostrando evento ficticio con IA…"):
-                    resp = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                    temperature=0.35,
-                    max_tokens=700,
-                        messages=[
-                        {
-                            "role": "system",
-                            "content": "Eres un periodista profesional. Escribes notas informativas con precisión y neutralidad." \
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
+            with st.spinner("🧠 Generando evento ficticio con IA…"):
+                news_text = generate_neutral_event(
+                    dominant_theme=dominant_theme,
+                    fecha_implementacion=fecha_implementacion,
+                    municipio=municipio,
+                    estado=estado,
+                    contexto_textual=form0_context,
                 )
-            news_text = resp.choices[0].message.content.strip()
             st.session_state["neutral_news_text"] = news_text
-            _log_debug_message(
-                "Evento ficticio listo.",
-                level="success",
-                context="Noticia neutral",
-            )
             st.markdown(news_text)
         except Exception as e:
             st.error(f"No pude generar el evento ficticio automáticamente: {e}")
@@ -1223,8 +1201,9 @@ def render_news_flow_page():
 
     story_dict = story if isinstance(story, dict) else {
         "text": story_text,
-        "image": story.get("image") if hasattr(story, "get") else None,
-        "encuadre": story.get("encuadre") if hasattr(story, "get") else None,
+        "image": None,
+        "encuadre": None,
+        "encuadre_codigo": f"Mensaje {idx + 1}",
     }
 
     _typing_then_bubble(

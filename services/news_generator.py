@@ -16,6 +16,116 @@ if str(PROJECT_ROOT) not in sys.path:
 from components.image_repo import select_image_for_story
 
 
+def _build_event_prompt(
+    dominant_theme: str,
+    fecha_implementacion: str | None,
+    municipio: str | None,
+    estado: str | None,
+    contexto_textual: str | None = None,
+) -> str:
+    contexto_fecha = ""
+    if fecha_implementacion:
+        contexto_fecha = (
+            f"- El hecho debe haber ocurrido dentro del mes previo a la fecha de implementación del taller "
+            f"({fecha_implementacion}). No utilices fechas anteriores a ese rango."
+        )
+
+    if municipio and estado:
+        contexto_ubicacion = f"el municipio de {municipio}, {estado}"
+    elif municipio:
+        contexto_ubicacion = f"el municipio de {municipio}"
+    elif estado:
+        contexto_ubicacion = f"el estado de {estado}"
+    else:
+        contexto_ubicacion = "la región correspondiente"
+
+    extra_context = contexto_textual or ""
+
+    prompt = f"""
+Contexto general:
+En un ejercicio previo, se identificaron los tópicos dominantes {dominant_theme} y las emociones asociadas que generan percepciones de inseguridad según las respuestas del [formulario 1]. Con base en esos hallazgos, se elaboró una nube de palabras que refleja los temas y emociones predominantes.
+{extra_context}
+
+Rol:
+Eres reportero de un medio independiente mexicano (por ejemplo, Animal Político, Aristegui Noticias, Proceso o Nexos). Debes redactar una **noticia breve, objetiva y verificable**, como si fuera una nota de crónica informativa publicada hoy.
+
+Instrucción:
+Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado con el tema dominante {dominant_theme}.
+El texto debe:
+
+- Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
+{contexto_fecha}
+- Estar contextualizado en {contexto_ubicacion}
+- Mantener una **estructura noticiosa clásica**:
+  - **Título factual y conciso.**
+  - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
+  - **Segundo párrafo:** detalles del hecho (acciones de autoridades, testigos, contexto inmediato).
+  - **Tercer párrafo:** contexto breve (por qué es relevante o cómo se relaciona con el tema dominante).
+- Evitar cualquier tono analítico, especulativo o explicativo.
+- No usar expresiones como “según expertos”, “se ha observado”, o “el fenómeno refleja”.
+- Permitir solo menciones genéricas a fuentes (“de acuerdo con reportes oficiales”, “autoridades locales informaron”).
+- Utilizar oraciones cortas, lenguaje informativo y directo.
+
+Estilo:
+- Periodismo mexicano independiente, tono sobrio y neutral.
+- Sin adjetivos, juicios, análisis ni interpretaciones.
+- Prioriza la precisión y la claridad.
+- Longitud aproximada: **100 a 150 palabras**.
+
+Formato de salida esperado:
+[Título de la noticia]
+[Cuerpo de 1 a 2 párrafos breves, estilo nota informativa]
+"""
+    return prompt
+
+
+def generate_neutral_event(
+    dominant_theme: str,
+    fecha_implementacion: str | None,
+    municipio: str | None,
+    estado: str | None,
+    contexto_textual: str | None = None,
+) -> str:
+    """Genera el evento ficticio base (antes de los encuadres)."""
+    if not dominant_theme:
+        raise ValueError("No se proporcionó tema dominante.")
+
+    prompt = _build_event_prompt(
+        dominant_theme=dominant_theme,
+        fecha_implementacion=fecha_implementacion,
+        municipio=municipio,
+        estado=estado,
+        contexto_textual=contexto_textual,
+    )
+
+    client = get_openai_client()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0.35,
+        max_tokens=700,
+        messages=[
+            {
+                "role": "system",
+                "content": "Eres un periodista profesional. Escribes notas informativas con precisión y neutralidad.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+    )
+    text = response.choices[0].message.content.strip()
+
+    log_payload = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": "Evento ficticio generado correctamente.",
+        "level": "success",
+        "context": "Evento ficticio",
+    }
+    existing = st.session_state.setdefault("workflow_debug_messages", [])
+    existing.append(log_payload)
+    st.session_state["workflow_debug_messages"] = existing[-200:]
+
+    return text
+
+
 def generate_news(dominant_theme: str, neutral_story: str | None = None):
     """
     Genera tres versiones del evento ficticio aplicando diferentes encuadres narrativos.
