@@ -111,7 +111,7 @@ def _format_workshop_code(normalized_date: str, sequence: int) -> str:
     day = dt.day
     month = dt.month
     year_two_digits = int(str(dt.year)[-2:])
-    date_code = f"{day}{month}{year_two_digits}"
+    date_code = f"{year_two_digits:02d}{month:02d}{day:02d}"
     return f"{date_code}{sequence}"
 
 

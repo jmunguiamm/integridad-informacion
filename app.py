@@ -15,7 +15,7 @@ import plotly.express as px
 from config.secrets import read_secrets, forms_sheet_id
 from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet, append_df_to_sheet
 from data.cleaning import normalize_form_data, filter_df_by_date
-from data.utils import get_date_column_name, normalize_date, get_workshop_options, load_joined_responses
+from data.utils import get_date_column_name, normalize_date, get_workshop_options, load_joined_responses, _format_workshop_code
 from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
 from components.qr_utils import qr_image_for
 from components.navigation import get_navigation_context
@@ -62,10 +62,77 @@ _qr_image_for = qr_image_for
 _autorefresh_toggle = autorefresh_toggle
 _openai_client = get_openai_client
 _analyze_reactions = analyze_reactions
+_format_workshop_code = _format_workshop_code
 
 
 def _current_workshop_code():
     return st.session_state.get("selected_workshop_code")
+
+
+def _assign_latest_workshop_code():
+    """Asigna el código del taller más reciente según timestamp a codigo_taller y selected_workshop_code."""
+    FORMS_SHEET_ID = _forms_sheet_id()
+    FORM0_TAB = _read_secrets("FORM0_TAB", "")
+    
+    if not FORM0_TAB:
+        return
+    
+    try:
+        df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+        if df0.empty:
+            return
+        
+        # Detectar fecha de implementación para normalizar
+        impl_col = None
+        for col in df0.columns:
+            col_clean = col.strip().lower()
+            if col_clean == "fecha de implementación".lower() or col_clean == "fecha de implementacion":
+                impl_col = col
+                break
+        
+        if impl_col:
+            df0['_normalized_date'] = df0[impl_col].apply(_normalize_date)
+        else:
+            date_col = _get_date_column_name(df0)
+            if not date_col:
+                return
+            df0['_normalized_date'] = df0[date_col].apply(_normalize_date)
+        
+        df0 = df0.dropna(subset=['_normalized_date']).copy()
+        if df0.empty:
+            return
+        
+        # Calcular secuencia antes de ordenar por timestamp
+        df0['_seq'] = df0.groupby('_normalized_date').cumcount() + 1
+        
+        # Detectar y ordenar por timestamp (marca temporal)
+        timestamp_col = None
+        for col in df0.columns:
+            col_lower = col.strip().lower()
+            if "marca temporal" in col_lower or "timestamp" in col_lower:
+                timestamp_col = col
+                break
+        
+        if not timestamp_col:
+            # Si no hay timestamp, usar el orden original del dataframe (último = más reciente)
+            df0 = df0.sort_index(ascending=False)
+        else:
+            df0[timestamp_col] = pd.to_datetime(df0[timestamp_col], errors='coerce')
+            df0 = df0.sort_values(by=timestamp_col, ascending=False)
+        
+        # Obtener el último taller según timestamp
+        if df0.empty:
+            return
+        
+        latest_row = df0.iloc[0]
+        latest_code = _format_workshop_code(latest_row['_normalized_date'], latest_row['_seq'])
+        
+        if latest_code:
+            st.session_state.codigo_taller = latest_code
+            st.session_state.selected_workshop_code = latest_code
+    
+    except Exception as e:
+        st.warning(f"Error obteniendo el último taller: {e}")
 
 
 def _log_debug_message(message: str, *, level: str = "info", context: str | None = None, data: dict | None = None):
@@ -290,6 +357,7 @@ def render_setup_trainer_page():
                 if "selected_workshop_code" not in st.session_state or st.session_state.get("selected_workshop_code") is None:
                     st.session_state.selected_workshop_code = workshop_options[0]["code"]
                     st.session_state.selected_workshop_date = workshop_options[0]["date"]
+                    st.session_state.codigo_taller = workshop_options[0]["code"]
 
                 def _option_label(opt):
                     return opt.get("label") or f"{opt.get('date')} · Número del taller {opt.get('code')}"
@@ -316,6 +384,7 @@ def render_setup_trainer_page():
                             st.cache_data.clear()
                             st.session_state.pop("selected_workshop_date", None)
                             st.session_state.pop("selected_workshop_code", None)
+                            st.session_state.pop("codigo_taller", None)
                             st.success("Lista actualizada. Vuelve a seleccionar un taller.")
                             st.rerun()
                         except Exception as refresh_error:
@@ -324,6 +393,7 @@ def render_setup_trainer_page():
                 # Actualizar session_state
                 st.session_state.selected_workshop_date = selected_option["date"]
                 st.session_state.selected_workshop_code = selected_option["code"]
+                st.session_state.codigo_taller = selected_option["code"]
 
                 st.success(f"✅ Taller seleccionado: **{_option_label(selected_option)}**")
                 st.info(
@@ -334,19 +404,25 @@ def render_setup_trainer_page():
                 st.warning("⚠️ No se encontraron talleres en el Form 0. Asegúrate de que haya respuestas en el formulario.")
                 st.session_state.selected_workshop_date = None
                 st.session_state.selected_workshop_code = None
+                st.session_state.codigo_taller = None
         except Exception as e:
             st.error(f"Error cargando talleres disponibles: {e}")
             st.session_state.selected_workshop_date = None
             st.session_state.selected_workshop_code = None
+            st.session_state.codigo_taller = None
     else:
         st.info("⚠️ Configura las credenciales para seleccionar un taller.")
         st.session_state.selected_workshop_date = None
         st.session_state.selected_workshop_code = None
+        st.session_state.codigo_taller = None
 
 def render_introduction_page():
     """🌎 Página de introducción para la persona facilitadora."""
     import streamlit as st
     import streamlit.components.v1 as components
+
+    # Actualizar el código del taller más reciente
+    _assign_latest_workshop_code()
 
     # --- CSS para fondo gris de la página ---
     st.markdown("""
@@ -477,6 +553,9 @@ def render_introduction_page():
     with col2:
         # Botón para volver al inicio
         if st.button("🏠 Ya he registrado el taller. Volver al inicio", use_container_width=True):
+            # Limpiar caché para obtener los datos más recientes
+            st.cache_data.clear()
+            _assign_latest_workshop_code()
             st.session_state.current_page = "Inicio"
             st.rerun()
     
@@ -498,45 +577,6 @@ def render_introduction_page():
         """, unsafe_allow_html=True)
 
         st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
-
-    # --- Resumen descargable del taller ---
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    workshop_options = _get_workshop_options()
-    if workshop_options:
-        st.subheader("📄 Descarga el resumen del número de taller")
-        workshop_code = st.session_state.get("selected_workshop_code")
-
-        def _format_date_ddmmaaaa(date_str: str | None) -> str:
-            if not date_str:
-                return ""
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
-            except Exception:
-                return date_str
-
-        summary_df = pd.DataFrame([
-            {
-                "Número de taller": opt["code"],
-                "Fecha (dd-mm-aaaa)": _format_date_ddmmaaaa(opt.get("date")),
-                "Municipio": opt.get("municipio") or "Sin municipio",
-                "Etiqueta": opt["label"],
-            }
-            for opt in workshop_options
-            if not workshop_code or opt["code"] == workshop_code
-        ])
-
-        summary_csv = summary_df.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            label="⬇️ Descargar resumen (CSV)",
-            data=summary_csv,
-            file_name="resumen_talleres.csv",
-            mime="text/csv",
-            help="Incluye la fecha, lugar y número de cada taller disponible."
-        )
-    else:
-        st.info("El resumen estará disponible cuando haya talleres registrados en Form 0.")
 
     # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
@@ -645,7 +685,7 @@ def render_form1_page():
                         <span style='display:inline-block;font-size:2rem;color:#0f172a;margin:0.3rem 0;'>
                             {workshop_code}
                         </span><br/>
-                        Escribe este número en la pregunta <em>“Ingresa el número de taller”</em> del formulario.
+                        Escribe este número en la pregunta <em>"Ingresa el número de taller"</em> del formulario.
                         </p>"""
                     if workshop_code else
                     "<p><strong>Número del taller pendiente.</strong> Ve a 'Configuraciones' para seleccionarlo.</p>"
@@ -779,15 +819,15 @@ def render_analysis_trends_page():
     Identificar el **tema o fenómeno dominante** que genera inseguridad entre las personas participantes, 
     entendiendo el **contexto y el tipo específico de problema** (no solo la categoría general).
 
-    El tema dominante debe reflejar no solo “qué” tipo de fenómeno ocurre, 
-    sino también “**en qué contexto o modalidad**” (por ejemplo: “violencia de género en espacios públicos”, 
-    “criminalidad asociada al narcotráfico”, “corrupción institucional ligada a la seguridad”, etc.).
+    El tema dominante debe reflejar no solo "qué" tipo de fenómeno ocurre, 
+    sino también "**en qué contexto o modalidad**" (por ejemplo: "violencia de género en espacios públicos", 
+    "criminalidad asociada al narcotráfico", "corrupción institucional ligada a la seguridad", etc.).
 
     ---
 
     🧩 **Tareas específicas:**
     1️⃣ Analiza ambas fuentes para determinar el **tema o fenómeno dominante** con su contexto: tipo de hecho, actores, causas y entorno social o mediático.  
-    2️⃣ Distingue las **subdimensiones o manifestaciones** del fenómeno (por ejemplo, “violencia” → “violencia de género” o “violencia digital”).  
+    2️⃣ Distingue las **subdimensiones o manifestaciones** del fenómeno (por ejemplo, "violencia" → "violencia de género" o "violencia digital").  
     3️⃣ Describe las **emociones predominantes** (miedo, enojo, desconfianza, indignación, tristeza, etc.) y su relación con el contexto del grupo.  
     4️⃣ Resume las **causas percibidas** y los **actores involucrados** (autoridades, grupos delictivos, comunidad, medios, etc.).  
     5️⃣ Sugiere hasta **10 palabras clave** representativas del tema y su entorno.  
@@ -807,7 +847,7 @@ def render_analysis_trends_page():
     ---
 
     🧠 **Reglas:**
-    - El tema debe ser **específico y contextual** (no solo “violencia” o “inseguridad”). Ejemplo: “violencia de género en espacios públicos”, “corrupción policial asociada al narcotráfico”, “desempleo juvenil y percepción de abandono institucional”.  
+    - El tema debe ser **específico y contextual** (no solo "violencia" o "inseguridad"). Ejemplo: "violencia de género en espacios públicos", "corrupción policial asociada al narcotráfico", "desempleo juvenil y percepción de abandono institucional".  
     - Usa solo información que pueda inferirse de los datos.  
     - Mantén tono analítico, educativo y en español mexicano natural.  
     - Devuelve **únicamente JSON estructurado**.
@@ -922,7 +962,7 @@ def render_neutral_news_page():
     
     dominant_theme = st.session_state.get("dominant_theme")
     if not dominant_theme:
-        st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
+        st.warning("Primero identifica el tema dominante en 'Análisis y tema dominante'.")
         st.caption("Usa la flecha izquierda en la barra lateral para regresar y obtener el tema.")
         return
 
@@ -1006,6 +1046,26 @@ def render_form2_page():
             '<p style="font-size: 1.5rem; font-weight: 700;"><strong>Recuerda identificarte con el número de tarjeta que se te repartió al inicio del taller.</strong></p>',
             unsafe_allow_html=True,
         )
+        
+        workshop_code = _current_workshop_code()
+        code_text = (
+            f"""<p style='margin-top:0.75rem;color:#1f2937;'>
+                <strong>Número del taller:</strong>
+                <span style='display:inline-block;font-size:2rem;color:#0f172a;margin:0.3rem 0;'>
+                    {workshop_code}
+                </span><br/>
+                Escribe este número en la pregunta <em>"Ingresa el número de taller"</em> del formulario.
+                </p>
+                """
+            if workshop_code else
+            "<p><strong>Número del taller pendiente.</strong> Ve a 'Configuraciones' para seleccionarlo.</p>"
+        )
+        st.markdown(
+            f"""
+            {code_text}
+            """,
+            unsafe_allow_html=True,
+        )
     
     with right_col:
         st.image("./images/Códigos QR/QR Form 2.png", caption="Escanea para abrir Cuestionario 2", width=360)
@@ -1028,7 +1088,7 @@ def render_form2_page():
 
     dom = st.session_state.get("dominant_theme")
     if not dom:
-        st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
+        st.warning("Primero identifica el tema dominante en 'Análisis y tema dominante'.")
         st.caption("Usa la flecha izquierda en la barra lateral para regresar a esa sección.")
         return
 
@@ -1132,7 +1192,7 @@ def render_news_flow_page():
     neutral_story = st.session_state.get("neutral_news_text")
     if not neutral_story:
         st.warning("Genera primero el evento ficticio para poder crear las versiones con encuadres.")
-        st.caption("Ve a ‘Evento ficticio del taller’, genera la base y vuelve aquí.")
+        st.caption("Ve a 'Evento ficticio del taller', genera la base y vuelve aquí.")
         generate_disabled = True
 
     if st.button("🔎 Mostrar noticias sobre este tema", type="primary", use_container_width=True, disabled=generate_disabled):
@@ -1164,7 +1224,7 @@ def render_news_flow_page():
     st.markdown("---")
 
     if not dominant_theme:
-        st.warning("⚠️ Aún no se ha identificado el tema dominante. Regresa a ‘Análisis y tema dominante’.")
+        st.warning("⚠️ Aún no se ha identificado el tema dominante. Regresa a 'Análisis y tema dominante'.")
         return
 
     st.info(f"Tema dominante actual: **{dominant_theme}**")
@@ -1824,7 +1884,7 @@ def render_inicio_page():
     
     with col1:
         if st.button("📝 Registra un taller", use_container_width=True, key="registra_taller", type="secondary"):
-            st.session_state.current_page = "Introducción al taller" 
+            st.session_state.current_page = "Registro de taller" 
             st.rerun()
     
     with col2:
@@ -1832,9 +1892,81 @@ def render_inicio_page():
             st.session_state.current_page = "Configuraciones"
             st.rerun()
 
+    # --- Resumen descargable del taller ---
+    codigo_taller = st.session_state.get("selected_workshop_code")
+    if codigo_taller:
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        workshop_options = _get_workshop_options()
+        if workshop_options:
+            # Banner destacado con el código del taller
+            st.markdown(f"""
+            <style>
+            .workshop-code-banner {{
+                background: linear-gradient(135deg, #004b8d 0%, #0066cc 100%);
+                color: white !important;
+                padding: 2rem;
+                border-radius: 15px;
+                box-shadow: 0 4px 15px rgba(0, 75, 141, 0.3);
+                text-align: center;
+                margin: 1.5rem 0;
+                border: 2px solid rgba(255, 255, 255, 0.2);
+            }}
+            .workshop-code-banner .banner-text {{
+                font-size: 1.8rem;
+                font-weight: 600;
+                margin: 0;
+                line-height: 1.4;
+                color: white !important;
+            }}
+            .workshop-code-banner .banner-code {{
+                font-size: 2.5rem;
+                font-weight: 700;
+                color: #ffd700;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+                margin-top: 0.5rem;
+                display: inline-block;
+                letter-spacing: 2px;
+            }}
+            </style>
+            <div class="workshop-code-banner">
+                <p class="banner-text">El código de tu taller es</p>
+                <div class="banner-code">{codigo_taller}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            def _format_date_ddmmaaaa(date_str: str | None) -> str:
+                if not date_str:
+                    return ""
+                try:
+                    return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+                except Exception:
+                    return date_str
+
+            summary_df = pd.DataFrame([
+                {
+                    "Número de taller": opt["code"],
+                    "Fecha (dd-mm-aaaa)": _format_date_ddmmaaaa(opt.get("date")),
+                    "Municipio": opt.get("municipio") or "Sin municipio",
+                    "Etiqueta": opt["label"],
+                }
+                for opt in workshop_options
+                if not codigo_taller or opt["code"] == codigo_taller
+            ])
+
+            summary_csv = summary_df.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="⬇️ Descargar resumen (CSV)",
+                data=summary_csv,
+                file_name="resumen_talleres.csv",
+                mime="text/csv",
+                help="Incluye la fecha, lugar y número de cada taller disponible."
+            )
+
 ROUTES = {
     "Inicio": render_inicio_page,
-    "Introducción al taller": render_introduction_page,           
+    "Registro de taller": render_introduction_page,           
     "Configuraciones": render_setup_trainer_page,      
     "Inicio del taller": render_workshop_start_page,
     "Cuestionario 1": render_form1_page,                          
@@ -1918,7 +2050,7 @@ def main():
     current_page = st.session_state.current_page
     
     # CSS condicional para páginas específicas
-    if current_page in ["Introducción al taller"]:
+    if current_page in ["Configuración de taller"]:
         st.markdown("""
         <style>
         .main .block-container {
@@ -2092,6 +2224,7 @@ def main():
         # --- Botones principales ---
         st.markdown('<div class="sidebar-main-buttons">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", use_container_width=True):
+            _assign_latest_workshop_code()
             st.session_state.current_page = "Inicio"
             st.rerun()
 
@@ -2126,7 +2259,7 @@ def main():
             has_next_news = news_mode and news_index < news_count - 1
 
             prev_disabled = not has_prev_news and not nav_ctx["previous"]
-            next_disabled = not has_next_news and not nav_ctx["next"]
+            next_disabled = (not has_next_news and not nav_ctx["next"]) or current_page == "Registro de taller"
 
             nav_cols = st.columns(2, gap="small")
             with nav_cols[0]:
@@ -2134,6 +2267,7 @@ def main():
                     if has_prev_news:
                         st.session_state.news_index = news_index - 1
                     elif nav_ctx["previous"]:
+                        _assign_latest_workshop_code()
                         st.session_state.current_page = nav_ctx["previous"]
                     st.rerun()
                 st.markdown('<div class="sidebar-arrow-caption">Anterior</div>', unsafe_allow_html=True)
