@@ -37,8 +37,8 @@ def normalize_date(date_value) -> str:
     
     try:
         if isinstance(date_value, str):
-            # Intentar parsear la fecha
-            parsed = date_parser.parse(date_value, fuzzy=True)
+            # Intentar parsear la fecha asumiendo formato día/mes (e.g., 1/12/2025 = 1 diciembre)
+            parsed = date_parser.parse(date_value, fuzzy=True, dayfirst=True)
             return parsed.strftime('%Y-%m-%d')
         elif isinstance(date_value, (datetime, pd.Timestamp)):
             return date_value.strftime('%Y-%m-%d')
@@ -96,6 +96,102 @@ def get_available_workshop_dates():
         
     except Exception as e:
         st.warning(f"Error obteniendo fechas del Form 0: {e}")
+        return []
+
+
+def _format_workshop_code(normalized_date: str, sequence: int) -> str:
+    """Convierte la fecha normalizada y el consecutivo en un código compacto."""
+    if not normalized_date:
+        return str(sequence)
+    try:
+        dt = datetime.strptime(normalized_date, "%Y-%m-%d")
+    except Exception:
+        return f"{normalized_date.replace('-', '')}{sequence}"
+
+    day = dt.day
+    month = dt.month
+    year_two_digits = int(str(dt.year)[-2:])
+    date_code = f"{day}{month}{year_two_digits}"
+    return f"{date_code}{sequence}"
+
+
+def _human_date(normalized_date: str) -> str:
+    if not normalized_date:
+        return "Sin fecha"
+    try:
+        dt = datetime.strptime(normalized_date, "%Y-%m-%d")
+        return dt.strftime("%d %b %Y")
+    except Exception:
+        return normalized_date
+
+
+def get_workshop_options():
+    """Devuelve una lista de talleres disponibles con su código automático."""
+    FORMS_SHEET_ID = forms_sheet_id()
+    FORM0_TAB = read_secrets("FORM0_TAB", "")
+
+    if not FORM0_TAB:
+        return []
+
+    try:
+        df0 = sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+        if df0.empty:
+            return []
+
+        # Detectar fecha de implementación
+        impl_col = None
+        for col in df0.columns:
+            col_clean = col.strip().lower()
+            if col_clean == "fecha de implementación".lower() or col_clean == "fecha de implementacion":
+                impl_col = col
+                break
+
+        if impl_col:
+            df0['_normalized_date'] = df0[impl_col].apply(normalize_date)
+        else:
+            date_col = get_date_column_name(df0)
+            if not date_col:
+                return []
+            df0['_normalized_date'] = df0[date_col].apply(normalize_date)
+
+        df0 = df0.dropna(subset=['_normalized_date']).copy()
+        if df0.empty:
+            return []
+
+        # Ordenar por marca temporal si existe, para mantener el orden de captura
+        timestamp_col = None
+        for col in df0.columns:
+            col_lower = col.strip().lower()
+            if "marca temporal" in col_lower or "timestamp" in col_lower:
+                timestamp_col = col
+                break
+
+        if timestamp_col:
+            df0[timestamp_col] = pd.to_datetime(df0[timestamp_col], errors='coerce')
+            df0 = df0.sort_values(by=timestamp_col)
+
+        df0['_seq'] = df0.groupby('_normalized_date').cumcount() + 1
+        df0['_workshop_code'] = df0.apply(
+            lambda row: _format_workshop_code(row['_normalized_date'], row['_seq']),
+            axis=1
+        )
+
+        options = []
+        for _, row in df0.iterrows():
+            normalized_date = row['_normalized_date']
+            code = row['_workshop_code']
+            label = f"{_human_date(normalized_date)} · Número del taller {code}"
+            options.append({
+                "date": normalized_date,
+                "code": code,
+                "label": label,
+            })
+
+        options.sort(key=lambda opt: opt["date"] or "", reverse=True)
+        return options
+
+    except Exception as e:
+        st.warning(f"Error obteniendo talleres disponibles: {e}")
         return []
 
 

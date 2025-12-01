@@ -1,39 +1,66 @@
 """Data cleaning and normalization functions."""
+import unicodedata
 import pandas as pd
 import streamlit as st
 from .utils import get_date_column_name, normalize_date
 
 
-def filter_df_by_date(df: pd.DataFrame, target_date: str) -> pd.DataFrame:
-    """Filtra un DataFrame por fecha usando la columna 'Marca temporal' (primera columna)."""
-    if df.empty or not target_date:
+def _normalize_column_name(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    without_accents = "".join(c for c in normalized if not unicodedata.combining(c))
+    return without_accents.lower().strip()
+
+
+def _find_workshop_code_column(df: pd.DataFrame) -> str | None:
+    for col in df.columns:
+        normalized = _normalize_column_name(col)
+        if "numero" in normalized and "taller" in normalized:
+            return col
+    return None
+
+
+def filter_df_by_date(df: pd.DataFrame, target_date: str = None, workshop_code: str | None = None) -> pd.DataFrame:
+    """Filtra un DataFrame por fecha y (opcionalmente) por 'número de taller'."""
+    if df.empty:
         return df
 
-    # Obtener columna de fecha (Marca temporal) - siempre usar la primera columna si no se encuentra explícitamente
-    date_col = get_date_column_name(df)
-    
-    # Si no hay columna de fecha, usar la primera columna (asumiendo que es la marca temporal)
-    if not date_col and len(df.columns) > 0:
-        date_col = df.columns[0]
-    
-    if not date_col:
-        # Si realmente no hay columnas, retornar sin filtrar
-        return df
-    
-    # Normalizar fechas y filtrar
-    df_copy = df.copy()
-    try:
-        df_copy['_normalized_date'] = df_copy[date_col].apply(normalize_date)
-        filtered = df_copy[df_copy['_normalized_date'] == target_date]
-        
-        if not filtered.empty:
-            filtered = filtered.drop(columns=['_normalized_date'])
-            return filtered
-    except Exception:
-        # Si hay error en el filtrado, retornar el DataFrame original
-        return df
-    
-    return pd.DataFrame()
+    workshop_code = str(workshop_code).strip() if workshop_code is not None else ""
+    if not workshop_code:
+        workshop_code = str(st.session_state.get("selected_workshop_code") or "").strip()
+
+    result_df = df.copy()
+
+    # --- Filtro por fecha ---
+    if target_date:
+        date_col = get_date_column_name(result_df)
+        if not date_col and len(result_df.columns) > 0:
+            date_col = result_df.columns[0]
+
+        if date_col:
+            try:
+                result_df["_normalized_date"] = result_df[date_col].apply(normalize_date)
+                result_df = result_df[result_df["_normalized_date"] == target_date]
+                result_df = result_df.drop(columns=["_normalized_date"])
+            except Exception:
+                # Si hay error en el filtrado, regresar DataFrame original
+                return df
+        else:
+            return df
+
+        if result_df.empty:
+            return result_df
+
+    # --- Filtro por número de taller ---
+    if workshop_code:
+        code_col = _find_workshop_code_column(result_df)
+        if code_col:
+            result_df = result_df[
+                result_df[code_col].astype(str).str.strip() == workshop_code
+            ]
+
+    return result_df
 
 
 def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date: str = None, show_debug: bool = False):

@@ -15,7 +15,7 @@ import plotly.express as px
 from config.secrets import read_secrets, forms_sheet_id
 from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet, append_df_to_sheet
 from data.cleaning import normalize_form_data, filter_df_by_date
-from data.utils import get_date_column_name, normalize_date, get_available_workshop_dates, load_joined_responses
+from data.utils import get_date_column_name, normalize_date, get_workshop_options, load_joined_responses
 from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
 from components.qr_utils import qr_image_for
 from components.navigation import get_navigation_context
@@ -51,7 +51,7 @@ _write_df_to_sheet = write_df_to_sheet
 _append_df_to_sheet = append_df_to_sheet
 _get_date_column_name = get_date_column_name
 _normalize_date = normalize_date
-_get_available_workshop_dates = get_available_workshop_dates
+_get_workshop_options = get_workshop_options
 _filter_df_by_date = filter_df_by_date
 _normalize_form_data = normalize_form_data
 _load_joined_responses = load_joined_responses
@@ -62,6 +62,10 @@ _qr_image_for = qr_image_for
 _autorefresh_toggle = autorefresh_toggle
 _openai_client = get_openai_client
 _analyze_reactions = analyze_reactions
+
+
+def _current_workshop_code():
+    return st.session_state.get("selected_workshop_code")
 
 
 def _log_debug_message(message: str, *, level: str = "info", context: str | None = None, data: dict | None = None):
@@ -279,51 +283,65 @@ def render_setup_trainer_page():
     
     if FORMS_SHEET_ID and FORM0_TAB and SA:
         try:
-            available_dates = _get_available_workshop_dates()
-            
-            if available_dates:
-                # Inicializar session_state si no existe
-                if "selected_workshop_date" not in st.session_state:
-                    # Por defecto, usar la fecha más reciente
-                    st.session_state.selected_workshop_date = available_dates[0]
-                
-                # Selector de fecha
-                display_dates = sorted(available_dates, reverse=True)
+            workshop_options = _get_workshop_options()
+
+            if workshop_options:
+                # Inicializar valores por defecto
+                if "selected_workshop_code" not in st.session_state or st.session_state.get("selected_workshop_code") is None:
+                    st.session_state.selected_workshop_code = workshop_options[0]["code"]
+                    st.session_state.selected_workshop_date = workshop_options[0]["date"]
+
+                def _option_label(opt):
+                    return opt.get("label") or f"{opt.get('date')} · Número del taller {opt.get('code')}"
+
+                current_code = st.session_state.get("selected_workshop_code")
+                selected_index = 0
+                for i, opt in enumerate(workshop_options):
+                    if opt["code"] == current_code:
+                        selected_index = i
+                        break
 
                 cols = st.columns([4, 1])
                 with cols[0]:
-                    selected_date = st.selectbox(
-                        "Selecciona la fecha del taller a analizar:",
-                        options=display_dates,
-                        index=0 if st.session_state.selected_workshop_date not in display_dates 
-                               else display_dates.index(st.session_state.selected_workshop_date),
-                        help="Las respuestas de Form 1 y Form 2 se filtrarán por esta fecha."
+                    selected_option = st.selectbox(
+                        "Selecciona el taller a analizar:",
+                        options=workshop_options,
+                        index=selected_index,
+                        format_func=_option_label,
+                        help="Los formularios se filtrarán por este número de taller.",
                     )
                 with cols[1]:
                     if st.button("🔄", help="Actualizar lista de talleres"):
                         try:
                             st.cache_data.clear()
-                            st.session_state.pop("available_dates_cache", None)
                             st.session_state.pop("selected_workshop_date", None)
+                            st.session_state.pop("selected_workshop_code", None)
                             st.success("Lista actualizada. Vuelve a seleccionar un taller.")
                             st.rerun()
                         except Exception as refresh_error:
                             st.error(f"No se pudo refrescar la lista: {refresh_error}")
-                
+
                 # Actualizar session_state
-                st.session_state.selected_workshop_date = selected_date
-                
-                st.success(f"✅ Taller seleccionado: **{selected_date}**. Todas las siguientes páginas mostrarán datos de ese día.")
-                st.info(f"📊 Para continuar el taller a partir de ahora desplázate con las flechas de la barra lateral.")
+                st.session_state.selected_workshop_date = selected_option["date"]
+                st.session_state.selected_workshop_code = selected_option["code"]
+
+                st.success(f"✅ Taller seleccionado: **{_option_label(selected_option)}**")
+                st.info(
+                    f"📊 Todas las páginas mostrarán solo los datos del número de taller {selected_option['code']} "
+                    f"(fecha {selected_option['date']})."
+                )
             else:
-                st.warning("⚠️ No se encontraron talleres (fechas) en el Form 0. Asegúrate de que haya respuestas en el formulario.")
+                st.warning("⚠️ No se encontraron talleres en el Form 0. Asegúrate de que haya respuestas en el formulario.")
                 st.session_state.selected_workshop_date = None
+                st.session_state.selected_workshop_code = None
         except Exception as e:
-            st.error(f"Error cargando fechas disponibles: {e}")
+            st.error(f"Error cargando talleres disponibles: {e}")
             st.session_state.selected_workshop_date = None
+            st.session_state.selected_workshop_code = None
     else:
         st.info("⚠️ Configura las credenciales para seleccionar un taller.")
         st.session_state.selected_workshop_date = None
+        st.session_state.selected_workshop_code = None
 
 def render_introduction_page():
     """🌎 Página de introducción para la persona facilitadora."""
@@ -523,6 +541,13 @@ def render_workshop_start_page():
         unsafe_allow_html=True
         )   
 
+    workshop_code = _current_workshop_code()
+    if workshop_code:
+        st.success(f"Número del taller: `{workshop_code}`")
+        st.caption("Comparte este número con todas las personas participantes; lo ingresarán en los formularios.")
+    else:
+        st.warning("Número del taller pendiente. Ve a 'Configuraciones' para seleccionarlo.")
+
     # Breve estructura pensada para proyectar
     st.markdown("### 🧭 💡 Propósito del taller")
     st.markdown("""
@@ -587,6 +612,15 @@ def render_form1_page():
 
         if st.button("🔄 Actualizar respuestas", use_container_width=True):
             st.rerun()
+
+    workshop_code = _current_workshop_code()
+    if workshop_code:
+        st.info(
+            f"Número del taller: `{workshop_code}`. Indica a la audiencia que lo escriba en la pregunta "
+            "'Ingresa el número de taller' dentro del formulario."
+        )
+    else:
+        st.warning("Número del taller no disponible aún. Ve a 'Configuraciones' para seleccionarlo.")
 
     if not (FORMS_SHEET_ID and FORM1_TAB and SA):
         st.info("Configura credenciales para ver conteo.")
@@ -1004,6 +1038,16 @@ def render_form2_page():
     else:
         st.warning("Configura FORM2_URL en secrets para mostrar el enlace.")
     st.markdown("---")
+
+    workshop_code = _current_workshop_code()
+    if workshop_code:
+        st.info(
+            f"Número del taller: `{workshop_code}`. Cada persona debe escribirlo en la pregunta "
+            "'Ingresa el número de taller' del formulario 2."
+        )
+    else:
+        st.warning("Número del taller no disponible aún. Ve a 'Configuraciones' para seleccionarlo.")
+
     dom = st.session_state.get("dominant_theme")
     if not dom:
         st.warning("Primero identifica el tema dominante en ‘Análisis y tema dominante’.")
@@ -1069,7 +1113,7 @@ def _parse_news_blocks(raw: str):
         # Eliminar encabezado tipo "Encuadre X:"
         t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()  # elimina "Encuadre 1:", "Encuadre 2:", etc.
         t = re.sub(r'(?i)^mensajes?\s*\d+\s*:?', '', t).strip()  # elimina "Mensaje 1:", etc.
-        t = re.sub(r'^/\d+\s*', '', t).strip()  # elimina tokens como "/1" al inicio
+        t = re.sub(r'^[\\/]\d+\s*', '', t).strip()  # elimina tokens como "/1" o "\1" al inicio
         
         # Eliminar líneas que son solo hashtags o encabezados markdown
         lines = [ln for ln in t.splitlines() if ln.strip()]
@@ -1174,7 +1218,7 @@ def render_news_flow_page():
 
     # Limpiar tokens residuales como '/1', '/2', etc., al inicio de cada línea
     story_text = "\n".join(
-        [re.sub(r"^/\d+\s*", "", line.strip()) for line in story_text_raw.splitlines()]
+        [re.sub(r"^[\\/]\d+\s*", "", line.strip()) for line in story_text_raw.splitlines()]
     ).strip()
 
     story_dict = story if isinstance(story, dict) else {
