@@ -83,7 +83,8 @@ def _assign_latest_workshop_code():
         except Exception:
             pass
 
-        df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+        cache_buster = datetime.utcnow().isoformat()
+        df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB, cache_buster=cache_buster)
         if df0.empty:
             return
         
@@ -107,10 +108,10 @@ def _assign_latest_workshop_code():
         if df0.empty:
             return
         
-        # Calcular secuencia antes de ordenar por timestamp
+        df0 = df0.reset_index(drop=True)
         df0['_seq'] = df0.groupby('_normalized_date').cumcount() + 1
         
-        # Detectar y ordenar por timestamp (marca temporal)
+        # Detectar timestamp (marca temporal)
         timestamp_col = None
         for col in df0.columns:
             col_lower = col.strip().lower()
@@ -118,18 +119,15 @@ def _assign_latest_workshop_code():
                 timestamp_col = col
                 break
         
-        if not timestamp_col:
-            # Si no hay timestamp, usar el orden original del dataframe (último = más reciente)
-            df0 = df0.sort_index(ascending=False)
-        else:
-            df0[timestamp_col] = pd.to_datetime(df0[timestamp_col], errors='coerce')
-            df0 = df0.sort_values(by=timestamp_col, ascending=False)
+        if timestamp_col:
+            df0[timestamp_col] = pd.to_datetime(
+                df0[timestamp_col],
+                errors='coerce',
+                dayfirst=True,
+            )
         
-        # Obtener el último taller según timestamp
-        if df0.empty:
-            return
-        
-        latest_row = df0.iloc[0]
+        # Último taller = última fila (orden de captura del Form 0)
+        latest_row = df0.iloc[-1]
         latest_code = _format_workshop_code(latest_row['_normalized_date'], latest_row['_seq'])
         
         if latest_code:

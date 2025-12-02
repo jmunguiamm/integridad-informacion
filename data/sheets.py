@@ -31,8 +31,12 @@ def get_gspread_client():
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def sheet_to_df(sheet_id: str, tab: str) -> pd.DataFrame:
-    """Lee hoja de cálculo (nombre tolerante a errores comunes)."""
+def sheet_to_df(sheet_id: str, tab: str, cache_buster: str | None = None) -> pd.DataFrame:
+    """Lee hoja de cálculo (nombre tolerante a errores comunes).
+
+    cache_buster se usa únicamente para invalidar manualmente el caché de Streamlit.
+    """
+    _ = cache_buster  # Referencia para evitar advertencias de variable no usada.
     gc = get_gspread_client()
     sh = gc.open_by_key(sheet_id)
     

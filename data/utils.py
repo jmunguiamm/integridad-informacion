@@ -109,8 +109,8 @@ def _format_workshop_code(normalized_date: str, sequence: int) -> str:
         clean_date = normalized_date.replace("/", "-")
         return f"{clean_date}{sequence}"
 
-    # Código sin separadores: YYYYMMDD{N}
-    date_code = dt.strftime("%Y%m%d")
+    # Código sin separadores: YYMMDD{N}
+    date_code = dt.strftime("%y%m%d")
     return f"{date_code}{sequence}"
 
 
@@ -133,13 +133,15 @@ def get_workshop_options(force_refresh: bool = False):
         return []
 
     try:
+        cache_buster = None
         if force_refresh:
             try:
                 sheet_to_df.clear()
             except Exception:
                 pass
+            cache_buster = datetime.utcnow().isoformat()
 
-        df0 = sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+        df0 = sheet_to_df(FORMS_SHEET_ID, FORM0_TAB, cache_buster=cache_buster)
         if df0.empty:
             return []
 
@@ -171,14 +173,16 @@ def get_workshop_options(force_refresh: bool = False):
                 timestamp_col = col
                 break
 
-        if timestamp_col:
-            df0[timestamp_col] = pd.to_datetime(df0[timestamp_col], errors='coerce')
-            df0 = df0.sort_values(by=timestamp_col)
-
         df0 = df0.reset_index(drop=True)
-
+        df0['_capture_order'] = df0.index + 1
         df0['_seq'] = df0.groupby('_normalized_date').cumcount() + 1
-        df0['_capture_order'] = range(1, len(df0) + 1)
+
+        if timestamp_col:
+            df0[timestamp_col] = pd.to_datetime(
+                df0[timestamp_col],
+                errors='coerce',
+                dayfirst=True,
+            )
         df0['_workshop_code'] = df0.apply(
             lambda row: _format_workshop_code(row['_normalized_date'], row['_seq']),
             axis=1
