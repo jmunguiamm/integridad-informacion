@@ -77,6 +77,12 @@ def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date:
         Tupla (DataFrame normalizado, DataFrame largo intermedio) o DataFrame normalizado si show_debug=False
         DataFrame normalizado con columnas: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor
     """
+    workshop_code = str(
+        st.session_state.get("selected_workshop_code")
+        or st.session_state.get("codigo_taller")
+        or ""
+    ).strip()
+
     # Filtrar por fecha si se especifica
     if workshop_date:
         if show_debug:
@@ -191,6 +197,8 @@ def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date:
     form1_base = form1[form1_base_cols].copy()
     form1_base.columns = ["marca_temporal", "tarjeta"] + (["genero"] if genero_col else [])
     form1_base["Taller"] = workshop_date or "T_001"
+    if workshop_code:
+        form1_base["numero_taller"] = workshop_code
     
     # === 2️⃣ Mapeo de encuadres ===
     encuadre_map = {
@@ -232,6 +240,7 @@ def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date:
             if matching_col and pd.notna(row[matching_col]) and str(row[matching_col]).strip():
                 valor = str(row[matching_col]).strip()
                 rows.append({
+                    "Número de taller": workshop_code,
                     "Taller": workshop_date or "T_001",
                     "Marca temporal": marca,
                     "Encuadre": encuadre_map[enc_id],
@@ -276,7 +285,8 @@ def normalize_form_data(form1: pd.DataFrame, form2: pd.DataFrame, workshop_date:
         df_final["genero"] = None
     
     # === 6️⃣ Ordenar y renombrar columnas ===
-    column_order = ["Taller", "Marca temporal", "Encuadre", "Número de tarjeta", "genero", "Pregunta", "Valor"]
+    df_final["Número de taller"] = workshop_code
+    column_order = ["Número de taller", "Taller", "Marca temporal", "Encuadre", "Número de tarjeta", "genero", "Pregunta", "Valor"]
     df_final = df_final[column_order].rename(columns={"genero": "Género"})
     
     # === 7️⃣ Expandir filas con valores separados por coma ===

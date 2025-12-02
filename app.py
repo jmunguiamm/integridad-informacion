@@ -6,6 +6,7 @@ import time
 import os
 import difflib
 import base64
+import unicodedata
 from datetime import datetime
 import pandas as pd
 import streamlit as st
@@ -1355,9 +1356,18 @@ def render_news_flow_page():
     story_text_raw = story.get("text", "") if isinstance(story, dict) else str(story)
 
     # Limpiar tokens residuales como '/1', '/2', etc., al inicio de cada línea
-    story_text = "\n".join(
-        [re.sub(r"^[\\/]\d+\s*", "", line.strip()) for line in story_text_raw.splitlines()]
-    ).strip()
+    cleaned_story_lines = []
+    for raw_line in story_text_raw.splitlines():
+        line = raw_line.strip()
+        line = re.sub(r"^[\\/+*=-]*\s*\d+\s*[:.)-]?\s*", "", line)
+        line = re.sub(r"^\\+\w*\s*", "", line)
+        line = re.sub(r"^[\\/]\d+\s*", "", line)
+        line = re.sub(r"\\\d+\s*", "", line)
+        cleaned_story_lines.append(line)
+
+    story_text = "\n".join(cleaned_story_lines).strip()
+    story_text = re.sub(r"^\\+\w*\s*", "", story_text)
+    story_text = re.sub(r"\\\d+\s*", "", story_text)
 
     story_dict = story if isinstance(story, dict) else {
         "text": story_text,
@@ -1447,6 +1457,13 @@ def render_conclusion_page():
 
         # Buscamos las columnas específicas de las tres últimas preguntas por encuadre.
         # Usamos los textos completos tal como aparecen en Form 2 (con acentos y signo de apertura).
+        def _normalize_answer(text: str) -> str:
+            if not isinstance(text, str):
+                return ""
+            normalized = unicodedata.normalize("NFKD", text)
+            without_accents = "".join(c for c in normalized if not unicodedata.combining(c))
+            return without_accents.lower().strip()
+
         expected_question_labels = [
             "¿Cuál crees que sea el encuadre usado en la noticia 1?",
             "¿Cuál crees que sea el encuadre usado en la noticia 2?",
@@ -1539,8 +1556,10 @@ def render_conclusion_page():
                 })
 
                 correct_label = encuadre_correcto_map.get(idx, "")
-                chart_data["Es correcta"] = chart_data["Opción"].astype(str).str.lower().apply(
-                    lambda option: correct_label in option if correct_label else False
+                correct_label_clean = _normalize_answer(correct_label)
+                chart_data["normalized_option"] = chart_data["Opción"].apply(_normalize_answer)
+                chart_data["Es correcta"] = chart_data["normalized_option"].apply(
+                    lambda option: correct_label_clean in option if correct_label_clean else False
                 )
 
                 fig = px.bar(
@@ -1563,9 +1582,7 @@ def render_conclusion_page():
 
                 st.plotly_chart(fig, use_container_width=True)
 
-                correct_match = chart_data[
-                    chart_data["Opción"].astype(str).str.lower().str.contains(correct_label)
-                ]
+                correct_match = chart_data[chart_data["Es correcta"]]
                 if not correct_match.empty:
                     correct_pct = float(correct_match["Porcentaje"].iloc[0])
                     option_label = correct_match["Opción"].iloc[0]
