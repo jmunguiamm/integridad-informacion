@@ -65,6 +65,7 @@ El texto debe:
 - No usar expresiones como “según expertos”, “se ha observado”, o “el fenómeno refleja”.
 - Permitir solo menciones genéricas a fuentes (“de acuerdo con reportes oficiales”, “autoridades locales informaron”).
 - Utilizar oraciones cortas, lenguaje informativo y directo.
+- No menciones el taller o el número de taller o los formadores.
 
 Estilo:
 - Periodismo mexicano independiente, tono sobrio y neutral.

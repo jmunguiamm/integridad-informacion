@@ -70,8 +70,13 @@ def _current_workshop_code():
     return st.session_state.get("selected_workshop_code")
 
 
-def _assign_latest_workshop_code():
-    """Asigna el código del taller más reciente según timestamp a codigo_taller y selected_workshop_code."""
+def _assign_latest_workshop_code(set_as_selected: bool = False):
+    """Asigna el código del taller más reciente según timestamp.
+
+    Si set_as_selected=True fuerza que selected_workshop_code cambie al último.
+    Si es False, solo actualiza selected_workshop_code cuando aún no existe.
+    Siempre actualiza st.session_state.codigo_taller para mostrar el más nuevo.
+    """
     FORMS_SHEET_ID = _forms_sheet_id()
     FORM0_TAB = _read_secrets("FORM0_TAB", "")
     
@@ -133,7 +138,8 @@ def _assign_latest_workshop_code():
         
         if latest_code:
             st.session_state.codigo_taller = latest_code
-            st.session_state.selected_workshop_code = latest_code
+            if set_as_selected or not st.session_state.get("selected_workshop_code"):
+                st.session_state.selected_workshop_code = latest_code
     
     except Exception as e:
         st.warning(f"Error obteniendo el último taller: {e}")
@@ -1844,17 +1850,24 @@ def render_workshop_insights_page():
         # 2) Muestra un vistazo mínimo (opcional)
         with st.expander("👀 Muestra de datos combinados utilizados (primeras 10 filas)"):
             df_preview = df_all
-            if workshop_date:
-                if "Taller" in df_all.columns:
-                    df_preview = df_all[df_all["Taller"] == workshop_date]
-                else:
-                    date_col = _get_date_column_name(df_all)
-                    if date_col:
-                        df_dates = df_all.copy()
-                        df_dates["_normalized_date"] = df_dates[date_col].apply(_normalize_date)
-                        df_preview = df_dates[df_dates["_normalized_date"] == workshop_date]
-                        if df_preview.empty:
-                            df_preview = df_all
+        workshop_code = st.session_state.get("selected_workshop_code")
+        if "Taller" in df_all.columns:
+            taller_series = df_all["Taller"].astype(str).str.strip()
+            filtered = pd.DataFrame()
+            if workshop_code:
+                filtered = df_all[taller_series == str(workshop_code).strip()]
+            if filtered.empty and workshop_date:
+                filtered = df_all[taller_series == str(workshop_date).strip()]
+            if not filtered.empty:
+                df_preview = filtered
+        elif workshop_date:
+            date_col = _get_date_column_name(df_all)
+            if date_col:
+                df_dates = df_all.copy()
+                df_dates["_normalized_date"] = df_dates[date_col].apply(_normalize_date)
+                filtered = df_dates[df_dates["_normalized_date"] == workshop_date]
+                if not filtered.empty:
+                    df_preview = filtered
             st.dataframe(df_preview.head(50), use_container_width=True)
 
         # 3) Separar formularios para normalización y contexto
@@ -2273,7 +2286,6 @@ def main():
         # --- Botones principales ---
         st.markdown('<div class="sidebar-main-buttons">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", use_container_width=True):
-            _assign_latest_workshop_code()
             st.session_state.current_page = "Inicio"
             st.rerun()
 
@@ -2316,7 +2328,6 @@ def main():
                     if has_prev_news:
                         st.session_state.news_index = news_index - 1
                     elif nav_ctx["previous"]:
-                        _assign_latest_workshop_code()
                         st.session_state.current_page = nav_ctx["previous"]
                     st.rerun()
                 st.markdown('<div class="sidebar-arrow-caption">Anterior</div>', unsafe_allow_html=True)
