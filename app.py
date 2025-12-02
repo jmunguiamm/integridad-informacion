@@ -78,6 +78,11 @@ def _assign_latest_workshop_code():
         return
     
     try:
+        try:
+            _sheet_to_df.clear()
+        except Exception:
+            pass
+
         df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
         if df0.empty:
             return
@@ -133,6 +138,16 @@ def _assign_latest_workshop_code():
     
     except Exception as e:
         st.warning(f"Error obteniendo el último taller: {e}")
+
+
+def _format_date_ddmmaaaa(date_str: str | None) -> str:
+    """Convierte YYYY-MM-DD a dd-mm-aaaa para mostrar al formador."""
+    if not date_str:
+        return ""
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+    except Exception:
+        return str(date_str)
 
 
 def _log_debug_message(message: str, *, level: str = "info", context: str | None = None, data: dict | None = None):
@@ -378,18 +393,18 @@ def render_setup_trainer_page():
                         format_func=_option_label,
                         help="Los formularios se filtrarán por este número de taller.",
                     )
-                with cols[1]:
-                    if st.button("🔄", help="Actualizar lista de talleres"):
-                        try:
-                            st.cache_data.clear()
-                            st.session_state.pop("selected_workshop_date", None)
-                            st.session_state.pop("selected_workshop_code", None)
-                            st.session_state.pop("codigo_taller", None)
-                            st.success("Lista actualizada. Vuelve a seleccionar un taller.")
-                            st.rerun()
-                        except Exception as refresh_error:
-                            st.error(f"No se pudo refrescar la lista: {refresh_error}")
-
+                # with cols[1]:
+                #     if st.button("🔄", help="Actualizar lista de talleres"):
+                #         try:
+                #             st.cache_data.clear()
+                #             st.session_state.pop("selected_workshop_date", None)
+                #             st.session_state.pop("selected_workshop_code", None)
+                #             st.session_state.pop("codigo_taller", None)
+                #             st.success("Lista actualizada. Vuelve a seleccionar un taller.")
+                #             st.rerun()
+                #         except Exception as refresh_error:
+                #             st.error(f"No se pudo refrescar la lista: {refresh_error}")
+                
                 # Actualizar session_state
                 st.session_state.selected_workshop_date = selected_option["date"]
                 st.session_state.selected_workshop_code = selected_option["code"]
@@ -544,20 +559,107 @@ def render_introduction_page():
         """, unsafe_allow_html=True)
     
     # Botones en paralelo
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Botón para descargar materiales del taller
-        st.link_button("📥 Descargar materiales del taller", "https://drive.google.com/drive/folders/1s1E5C-qEpVn2fLKJt-YFfj0XnkG6ezAp?usp=sharing", use_container_width=True)
+        st.link_button(
+            "📥 Descargar materiales del taller",
+            "https://drive.google.com/drive/folders/1s1E5C-qEpVn2fLKJt-YFfj0XnkG6ezAp?usp=sharing",
+            use_container_width=True,
+        )
     
     with col2:
-        # Botón para volver al inicio
+        if st.button(
+            "🔄 Generar / actualizar código de taller",
+            use_container_width=True,
+            key="intro_refresh_latest_workshop_card",
+            help="Refresca Form 0 para traer el último código capturado en esta sesión.",
+        ):
+            st.session_state["show_latest_workshop_card"] = True
+            st.rerun()
+    
+    with col3:
         if st.button("🏠 Ya he registrado el taller. Volver al inicio", use_container_width=True):
-            # Limpiar caché para obtener los datos más recientes
             st.cache_data.clear()
             _assign_latest_workshop_code()
             st.session_state.current_page = "Inicio"
             st.rerun()
+
+    # Tarjeta del último taller recién registrada (si se solicitó)
+    show_latest_card = st.session_state.get("show_latest_workshop_card", False)
+    if show_latest_card:
+        workshop_options = _get_workshop_options(force_refresh=True)
+        latest_registered = None
+        if workshop_options:
+            latest_registered = max(
+                workshop_options,
+                key=lambda opt: opt.get("capture_order", 0)
+            )
+
+        if latest_registered:
+            latest_code = latest_registered["code"]
+            latest_date = _format_date_ddmmaaaa(latest_registered.get("date"))
+            latest_municipio = latest_registered.get("municipio") or "Municipio por confirmar"
+            capture_ts = latest_registered.get("capture_timestamp")
+            capture_display = ""
+            if capture_ts:
+                try:
+                    capture_display = pd.to_datetime(capture_ts).strftime("%d-%m-%Y %H:%M")
+                except Exception:
+                    capture_display = str(capture_ts)
+
+            st.markdown("""
+                <style>
+                .latest-workshop-card {
+                    background: linear-gradient(135deg, #0f172a, #1d4ed8);
+                    color: #fff;
+                    padding: 1.5rem;
+                    border-radius: 1rem;
+                    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.3);
+                    margin-top: 1rem;
+                    margin-bottom: 1.5rem;
+                }
+                .latest-workshop-card .code-label {
+                    font-size: 1.1rem;
+                    margin-bottom: 0.6rem;
+                    opacity: 0.9;
+                }
+                .latest-workshop-card .code-value {
+                    font-size: 2.8rem;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                }
+                .latest-workshop-card .meta {
+                    margin-top: 0.4rem;
+                    font-size: 1.05rem;
+                    color: #ffffff;
+                    font-weight: 600;
+                    opacity: 1;
+                }
+                .latest-workshop-card .meta-label {
+                    color: #ffffff;
+                    font-weight: 700;
+                    margin-right: 0.3rem;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+
+            st.markdown(
+                f"""
+                <div class="latest-workshop-card">
+                    <div class="code-label">Comparte este número con tu audiencia y úsalo en los formularios:</div>
+                    <div class="code-value">{latest_code}</div>
+                    <div class="meta"><span class="meta-label">Fecha:</span> {latest_date or "Por definir"}</div>
+                    <div class="meta"><span class="meta-label">Municipio:</span> {latest_municipio}</div>
+                    {f'<div class="meta"><span class="meta-label">Registrado el:</span> {capture_display}</div>' if capture_display else ""}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("Aún no hay talleres registrados en Form 0. Completa el formulario para generar el primer código.")
+    else:
+        st.caption("Cuando termines el Formulario 0, pulsa “Generar / actualizar código de taller” para ver el último número.")
     
     # Formulario embebido (solo si hay FORM0_URL)
     if FORM0_URL:
@@ -573,12 +675,12 @@ def render_introduction_page():
                 marginwidth="0">
                 Cargando…
             </iframe>
-        </div>
-        """, unsafe_allow_html=True)
-
+    </div>
+    """, unsafe_allow_html=True)
+    
         st.caption("Puedes completar el Formulario 0 directamente aquí, sin salir de la aplicación.")
 
-    # --- Siguiente paso del taller (en la página principal) ---
+        # --- Siguiente paso del taller (en la página principal) ---
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 🚀 Si has configurado tu taller, estas listo para continuar")
 
@@ -959,7 +1061,7 @@ def render_neutral_news_page():
                 '<p style="font-size: 1.5rem; font-weight: 500;">Con el apoyo de una persona voluntaria, lean la noticia en voz alta y pasen a la siguiente ventana</strong>.</p>',
                 unsafe_allow_html=True
                 )  
-    
+
     dominant_theme = st.session_state.get("dominant_theme")
     if not dominant_theme:
         st.warning("Primero identifica el tema dominante en 'Análisis y tema dominante'.")
@@ -1149,7 +1251,7 @@ def _parse_news_blocks(raw: str):
         t = re.sub(r'\*{1,2}(?!\S)|(?<!\S)\*{1,2}', '', t)
         t = re.sub(r'(?i)^\*\*noticia compartida en whatsapp\*\*\s*:?', '', t).strip()
         # Eliminar encabezado tipo "Encuadre X:"
-        t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()  # elimina "Encuadre 1:", "Encuadre 2:", etc.
+        t = re.sub(r'(?i)^encuadre\s*\d+\s*:?', '', t).strip()  # elimina "Encuadre 1:", "Encuadre 2:", etc.    
         t = re.sub(r'(?i)^mensajes?\s*\d+\s*:?', '', t).strip()  # elimina "Mensaje 1:", etc.
         t = re.sub(r'^[\\/]\d+\s*', '', t).strip()  # elimina tokens como "/1" o "\1" al inicio
         
@@ -1238,7 +1340,7 @@ def render_news_flow_page():
             stories = _parse_news_blocks(raw)
         else:
             st.info("Haz clic en el botón superior para generar los mensajes basados en el tema dominante.")
-            return
+        return
 
     if not stories:
         st.warning("No se pudieron interpretar mensajes desde el texto generado.")
@@ -1302,7 +1404,7 @@ def render_explanation_page():
             '<p style="font-size: 1.5rem; font-weight: 500;">En esta sección puedes revisar el contexto general del taller antes de pasar al análisis final</strong>.</p>',
             unsafe_allow_html=True
             )  
-    
+
     st.subheader("Hilo Conductor")
     st.markdown(
             '<p style="font-size: 1.5rem; font-weight: 300;">Sabías que existen factores cognitivos, sociales y emocionales que influyen directamente en la aceptación de la información falsa, incompleta o nociva? En este ejercicio de prevención, lo que hicimos fue exponernos a mensajes que estaban enmarcados con narraciones intencionales, las cuales se identifican como marcos narrativos, estos emplean técnicas de lenguaje con el propósito de impactar las emociones y percepciones de las personas</strong>.</p>',
@@ -1312,7 +1414,7 @@ def render_explanation_page():
             '<p style="font-size: 1.5rem; font-weight: 300;">En la siguiente pantalla analizaremos los impactos de los marcos narrativos en las emociones y la percepción de confianza</strong>.</p>',
             unsafe_allow_html=True
             )  
-            
+
 def render_conclusion_page():
     """Página de conclusión con gráficos de las últimas 3 preguntas de Form 2."""
     st.markdown("## 🎯 Conclusión")
@@ -1821,7 +1923,7 @@ def render_workshop_insights_page():
     with st.expander("¿Qué revisa este bloque?"):
         st.markdown(
 "Los componentes gráficos y textuales y narrativos desempeñan un papel fundamental en la forma en que se percibe y se da credibilidad a la información errónea. Estos componentes como imágenes, videos deepfake, texto manipulado y otros elementos visuales, se utiliza intencionalmente para apelar a las emociones, aumentando la persuasión y la probabilidad de que la información falsa persista incluso después de ser corregida. La IA generativa ha facilitado la creación y difusión de contenido atractivo y altamente convincente mediante la combinación de imagen, video, voz y texto, lo cual hace cada vez más difícil para los usuarios distinguir entre contenido auténtico y contenido manipulado. Regresen a los gráficos y discutan: ¿Cuáles son los elementos que sobresalieron en cada marco narrativo? ¿Hay algunos elementos que causan más credibilidad que otros? ¿Cuáles y por qué?")
-        
+
     st.markdown("### Análisis general del taller")
     with st.expander("¿Qué integra este resumen?"):
         st.markdown(
@@ -1894,75 +1996,7 @@ def render_inicio_page():
 
     # --- Resumen descargable del taller ---
     codigo_taller = st.session_state.get("selected_workshop_code")
-    if codigo_taller:
-        st.markdown("<hr>", unsafe_allow_html=True)
-        
-        workshop_options = _get_workshop_options()
-        if workshop_options:
-            # Banner destacado con el código del taller
-            st.markdown(f"""
-            <style>
-            .workshop-code-banner {{
-                background: linear-gradient(135deg, #004b8d 0%, #0066cc 100%);
-                color: white !important;
-                padding: 2rem;
-                border-radius: 15px;
-                box-shadow: 0 4px 15px rgba(0, 75, 141, 0.3);
-                text-align: center;
-                margin: 1.5rem 0;
-                border: 2px solid rgba(255, 255, 255, 0.2);
-            }}
-            .workshop-code-banner .banner-text {{
-                font-size: 1.8rem;
-                font-weight: 600;
-                margin: 0;
-                line-height: 1.4;
-                color: white !important;
-            }}
-            .workshop-code-banner .banner-code {{
-                font-size: 2.5rem;
-                font-weight: 700;
-                color: #ffd700;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-                margin-top: 0.5rem;
-                display: inline-block;
-                letter-spacing: 2px;
-            }}
-            </style>
-            <div class="workshop-code-banner">
-                <p class="banner-text">El código de tu taller es</p>
-                <div class="banner-code">{codigo_taller}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            def _format_date_ddmmaaaa(date_str: str | None) -> str:
-                if not date_str:
-                    return ""
-                try:
-                    return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
-                except Exception:
-                    return date_str
-
-            summary_df = pd.DataFrame([
-                {
-                    "Número de taller": opt["code"],
-                    "Fecha (dd-mm-aaaa)": _format_date_ddmmaaaa(opt.get("date")),
-                    "Municipio": opt.get("municipio") or "Sin municipio",
-                    "Etiqueta": opt["label"],
-                }
-                for opt in workshop_options
-                if not codigo_taller or opt["code"] == codigo_taller
-            ])
-
-            summary_csv = summary_df.to_csv(index=False).encode("utf-8")
-
-            st.download_button(
-                label="⬇️ Descargar resumen (CSV)",
-                data=summary_csv,
-                file_name="resumen_talleres.csv",
-                mime="text/csv",
-                help="Incluye la fecha, lugar y número de cada taller disponible."
-            )
+    # (Se removió la tarjeta azul y el botón de descarga de la pantalla de inicio.)
 
 ROUTES = {
     "Inicio": render_inicio_page,
@@ -2056,9 +2090,9 @@ def main():
         .main .block-container {
             background-color: #f0f4f8 !important;
             padding: 2rem !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # --- SIDEBAR PERSONALIZADO ---
     with st.sidebar:
@@ -2220,7 +2254,7 @@ def main():
             unsafe_allow_html=True,
         )
 
-       
+
         # --- Botones principales ---
         st.markdown('<div class="sidebar-main-buttons">', unsafe_allow_html=True)
         if st.button("🏠 Inicio", use_container_width=True):
@@ -2232,9 +2266,9 @@ def main():
             st.session_state.current_page = "Configuraciones"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-        
 
-        
+
+
         # Mostrar la página actual
         st.markdown(
             f"<div class='sidebar-current'>Página actual:<br><b>{st.session_state.current_page}</b></div>",

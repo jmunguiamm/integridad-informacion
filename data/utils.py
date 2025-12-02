@@ -106,12 +106,11 @@ def _format_workshop_code(normalized_date: str, sequence: int) -> str:
     try:
         dt = datetime.strptime(normalized_date, "%Y-%m-%d")
     except Exception:
-        return f"{normalized_date.replace('-', '')}{sequence}"
+        clean_date = normalized_date.replace("/", "-")
+        return f"{clean_date}{sequence}"
 
-    day = dt.day
-    month = dt.month
-    year_two_digits = int(str(dt.year)[-2:])
-    date_code = f"{year_two_digits:02d}{month:02d}{day:02d}"
+    # Código sin separadores: YYYYMMDD{N}
+    date_code = dt.strftime("%Y%m%d")
     return f"{date_code}{sequence}"
 
 
@@ -125,7 +124,7 @@ def _human_date(normalized_date: str) -> str:
         return normalized_date
 
 
-def get_workshop_options():
+def get_workshop_options(force_refresh: bool = False):
     """Devuelve una lista de talleres disponibles con su código automático."""
     FORMS_SHEET_ID = forms_sheet_id()
     FORM0_TAB = read_secrets("FORM0_TAB", "")
@@ -134,6 +133,12 @@ def get_workshop_options():
         return []
 
     try:
+        if force_refresh:
+            try:
+                sheet_to_df.clear()
+            except Exception:
+                pass
+
         df0 = sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
         if df0.empty:
             return []
@@ -170,7 +175,10 @@ def get_workshop_options():
             df0[timestamp_col] = pd.to_datetime(df0[timestamp_col], errors='coerce')
             df0 = df0.sort_values(by=timestamp_col)
 
+        df0 = df0.reset_index(drop=True)
+
         df0['_seq'] = df0.groupby('_normalized_date').cumcount() + 1
+        df0['_capture_order'] = range(1, len(df0) + 1)
         df0['_workshop_code'] = df0.apply(
             lambda row: _format_workshop_code(row['_normalized_date'], row['_seq']),
             axis=1
@@ -190,11 +198,17 @@ def get_workshop_options():
             municipio_value = None
             if municipio_col and municipio_col in row and pd.notna(row[municipio_col]):
                 municipio_value = str(row[municipio_col]).strip()
+            capture_ts = None
+            if timestamp_col and timestamp_col in row and pd.notna(row[timestamp_col]):
+                ts_value = row[timestamp_col]
+                capture_ts = ts_value.isoformat() if hasattr(ts_value, "isoformat") else str(ts_value)
             options.append({
                 "date": normalized_date,
                 "code": code,
                 "label": label,
                 "municipio": municipio_value,
+                "capture_order": int(row.get('_capture_order', 0)),
+                "capture_timestamp": capture_ts,
             })
 
         options.sort(key=lambda opt: opt["date"] or "", reverse=True)
