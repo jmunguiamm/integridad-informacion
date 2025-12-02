@@ -14,8 +14,14 @@ def get_gspread_client():
     sa_json = read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
     if not sa_json:
         raise RuntimeError("Falta GOOGLE_SERVICE_ACCOUNT en secrets/env.")
-    
-    sa_info = json.loads(sa_json)
+
+    # En Cloud el secreto puede llegar como dict. Local suele ser string JSON.
+    if isinstance(sa_json, str):
+        sa_info = json.loads(sa_json)
+    elif isinstance(sa_json, dict):
+        sa_info = sa_json
+    else:
+        raise TypeError("GOOGLE_SERVICE_ACCOUNT debe ser string JSON o dict.")
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
