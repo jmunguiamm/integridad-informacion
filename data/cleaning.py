@@ -56,9 +56,12 @@ def filter_df_by_date(df: pd.DataFrame, target_date: str = None, workshop_code: 
     if workshop_code:
         code_col = _find_workshop_code_column(result_df)
         if code_col:
-            result_df = result_df[
-                result_df[code_col].astype(str).str.strip() == workshop_code
-            ]
+            code_series = result_df[code_col].astype(str).str.strip()
+            code_series = code_series.str.replace(r"\.0+$", "", regex=True)
+            target_code = str(workshop_code).strip()
+            if target_code.endswith(".0"):
+                target_code = target_code[:-2]
+            result_df = result_df[code_series == target_code]
 
     return result_df
 

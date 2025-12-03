@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 from dateutil import parser as date_parser
-from .sheets import sheet_to_df
+from .sheets import sheet_to_df, write_df_to_sheet
 from config.secrets import forms_sheet_id, read_secrets
 
 
@@ -187,6 +187,40 @@ def get_workshop_options(force_refresh: bool = False):
             lambda row: _format_workshop_code(row['_normalized_date'], row['_seq']),
             axis=1
         )
+
+        # Garantizar columna "Número de taller" en Form 0
+        code_col = None
+        for col in df0.columns:
+            col_lower = col.strip().lower()
+            if "numero" in col_lower and "taller" in col_lower:
+                code_col = col
+                break
+
+        desired_codes = df0['_workshop_code'].astype(str).str.strip()
+        need_update_form0 = False
+        df0_for_sheet = df0.copy()
+        if code_col:
+            existing_codes = df0_for_sheet[code_col].astype(str).str.strip()
+            if not existing_codes.equals(desired_codes):
+                df0_for_sheet[code_col] = desired_codes
+                need_update_form0 = True
+        else:
+            code_col = "Número de taller"
+            df0_for_sheet[code_col] = desired_codes
+            need_update_form0 = True
+
+        if need_update_form0:
+            helper_cols = [c for c in ['_normalized_date', '_seq', '_capture_order', '_workshop_code'] if c in df0_for_sheet.columns]
+            df0_clean = df0_for_sheet.drop(columns=helper_cols)
+            try:
+                write_df_to_sheet(FORMS_SHEET_ID, FORM0_TAB, df0_clean, clear_existing=True)
+                try:
+                    sheet_to_df.clear()
+                except Exception:
+                    pass
+                df0 = df0_for_sheet
+            except Exception as write_err:
+                st.warning(f"No pude actualizar 'Número de taller' en Form 0: {write_err}")
 
         municipio_col = None
         for col in df0.columns:

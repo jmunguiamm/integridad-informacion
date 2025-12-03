@@ -58,13 +58,26 @@ def analyze_reactions(df_all, key):
     return resp.choices[0].message.content.strip()
 
 
-def analyze_trends(form1_sample, form0_context):
-    """Analyze trends and dominant themes from Form 0 and Form 1."""
+def analyze_trends(form1_df, form0_df, *, max_form1_rows: int = 100, max_form0_rows: int = 30):
+    """Analiza Form 0 + Form 1 y devuelve el JSON con el tema dominante."""
     import json
     import re
-    
-    context_text = form0_context or "(vacío)"
-    sample = form1_sample or "(vacío)"
+
+    if form1_df is None or form1_df.empty:
+        raise ValueError("Form 1 está vacío; no se puede analizar.")
+
+    def _rows_to_text(df, limit):
+        return "\n".join(
+            f"{i+1}) " + " | ".join(f"{k}={v}" for k, v in row.items())
+            for i, row in enumerate(df.to_dict("records")[:limit])
+        ) or "(vacío)"
+
+    sample_form1 = _rows_to_text(form1_df, max_form1_rows)
+    context_form0 = (
+        _rows_to_text(form0_df, max_form0_rows)
+        if form0_df is not None and not form0_df.empty
+        else "(vacío)"
+    )
 
     analysis_prompt = f"""
     Actúa como un **analista de datos cualitativos experto en comunicación social, seguridad y percepción pública**. 
@@ -73,10 +86,10 @@ def analyze_trends(form1_sample, form0_context):
     Dispones de dos fuentes de entrada:
 
     [Formulario 0 – Contexto del grupo y del entorno local]
-    {context_text}
+    {context_form0}
 
     [Formulario 1 – Percepciones de inseguridad y consumo informativo]
-    {sample}
+    {sample_form1}
 
     ---
 
@@ -117,7 +130,7 @@ def analyze_trends(form1_sample, form0_context):
     - Mantén tono analítico, educativo y en español mexicano natural.  
     - Devuelve **únicamente JSON estructurado**.
     """
-    
+
     client = get_openai_client()
     with st.spinner("🔍 Analizando respuestas del Form 0 y Form 1…"):
         resp = client.chat.completions.create(
@@ -130,8 +143,10 @@ def analyze_trends(form1_sample, form0_context):
             ],
         )
     text = resp.choices[0].message.content.strip()
-    data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
-    return data
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        raise ValueError(f"No se pudo extraer JSON del análisis de tema dominante:\n{text[:400]}...")
+    return json.loads(match.group(0))
 
 def analyze_final_report(
     df_long_normalized,        # DataFrame largo: Taller, Marca temporal, Encuadre, Número de tarjeta, Género, Pregunta, Valor

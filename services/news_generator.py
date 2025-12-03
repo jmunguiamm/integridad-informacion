@@ -26,8 +26,8 @@ def _build_event_prompt(
     contexto_fecha = ""
     if fecha_implementacion:
         contexto_fecha = (
-            f"- El hecho debe haber ocurrido dentro del mes previo a la fecha de implementación del taller "
-            f"({fecha_implementacion}). No utilices fechas anteriores a ese rango."
+            f"- El hecho debe ocurrir dentro del mes previo a la fecha de implementación del taller "
+            f"({fecha_implementacion}). No utilices años anteriores ni posteriores; cualquier mención temporal debe ser coherente con ese periodo."
         )
 
     if municipio and estado:
@@ -37,7 +37,7 @@ def _build_event_prompt(
     elif estado:
         contexto_ubicacion = f"el estado de {estado}"
     else:
-        contexto_ubicacion = "la región correspondiente"
+        contexto_ubicacion = None
 
     extra_context = contexto_textual or ""
 
@@ -45,6 +45,10 @@ def _build_event_prompt(
 Contexto general:
 En un ejercicio previo, se identificaron los tópicos dominantes {dominant_theme} y las emociones asociadas que generan percepciones de inseguridad según las respuestas del [formulario 1]. Con base en esos hallazgos, se elaboró una nube de palabras que refleja los temas y emociones predominantes.
 {extra_context}
+
+Contexto específico del taller:
+- Ubicación obligatoria: {contexto_ubicacion}. No cambies de estado ni municipio.
+{contexto_fecha}
 
 Rol:
 Eres reportero de un medio independiente mexicano (por ejemplo, Animal Político, Aristegui Noticias, Proceso o Nexos). Debes redactar una **noticia breve, objetiva y verificable**, como si fuera una nota de crónica informativa publicada hoy.
@@ -54,8 +58,7 @@ Redacta una **noticia factual** sobre un **hecho o suceso reciente** relacionado
 El texto debe:
 
 - Presentar un **hecho concreto y reciente** (por ejemplo, un incidente, operativo, declaración oficial o evento público).
-{contexto_fecha}
-- Estar contextualizado en {contexto_ubicacion}
+- Estar contextualizado en {contexto_ubicacion}. No menciones ciudades o regiones distintas.
 - Mantener una **estructura noticiosa clásica**:
   - **Título factual y conciso.**
   - **Primer párrafo (lead):** qué ocurrió, dónde, cuándo y a quiénes involucró.
@@ -66,6 +69,7 @@ El texto debe:
 - Permitir solo menciones genéricas a fuentes (“de acuerdo con reportes oficiales”, “autoridades locales informaron”).
 - Utilizar oraciones cortas, lenguaje informativo y directo.
 - No menciones el taller o el número de taller o los formadores.
+- Si mencionas fechas o periodos, deben ser consistentes con {fecha_implementacion or "la fecha indicada"} y describir hechos recientes, nunca pasados remotos.
 
 Estilo:
 - Periodismo mexicano independiente, tono sobrio y neutral.

@@ -32,6 +32,7 @@ from services.ai_analysis import (
 
 from services.news_generator import generate_news, generate_neutral_event
 from components.image_repo import get_images_for_dominant_theme
+import unicodedata
 
 
 # ---------- CONFIG BÁSICA ----------
@@ -68,6 +69,13 @@ _format_workshop_code = _format_workshop_code
 
 def _current_workshop_code():
     return st.session_state.get("selected_workshop_code")
+
+
+def _normalize_label(text: str | None) -> str:
+    if not isinstance(text, str):
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in normalized if not unicodedata.combining(c)).lower().strip()
 
 
 def _assign_latest_workshop_code(set_as_selected: bool = False):
@@ -143,6 +151,44 @@ def _assign_latest_workshop_code(set_as_selected: bool = False):
     
     except Exception as e:
         st.warning(f"Error obteniendo el último taller: {e}")
+
+
+def _filter_form0_by_workshop(df0: pd.DataFrame | None, workshop_date: str | None):
+    """Devuelve (df_filtrado, fecha_impl, municipio, estado) para el taller actual."""
+    if df0 is None or df0.empty or not workshop_date:
+        return pd.DataFrame(), None, None, None
+
+    df = df0.copy()
+    fecha_impl_col = next(
+        (col for col in df.columns if "fecha" in _normalize_label(col) and "implement" in _normalize_label(col)),
+        None
+    )
+    if fecha_impl_col:
+        df["_normalized_impl"] = df[fecha_impl_col].apply(_normalize_date)
+        df = df[df["_normalized_impl"] == workshop_date].drop(columns=["_normalized_impl"])
+    else:
+        df = df.copy()
+
+    workshop_code = _current_workshop_code()
+    if workshop_code:
+        code_col = next(
+            (col for col in df.columns if "numero" in _normalize_label(col) and "taller" in _normalize_label(col)),
+            None
+        )
+        if code_col:
+            df = df[df[code_col].astype(str).str.strip() == str(workshop_code).strip()]
+
+    if df.empty:
+        return pd.DataFrame(), None, None, None
+
+    municipio_col = next((col for col in df.columns if "municipio" in _normalize_label(col)), None)
+    estado_col = next((col for col in df.columns if "estado" in _normalize_label(col)), None)
+
+    fecha_val = df[fecha_impl_col].iloc[0] if fecha_impl_col in df else None
+    municipio_val = df[municipio_col].iloc[0] if municipio_col and pd.notna(df[municipio_col].iloc[0]) else None
+    estado_val = df[estado_col].iloc[0] if estado_col and pd.notna(df[estado_col].iloc[0]) else None
+
+    return df.reset_index(drop=True), fecha_val, municipio_val, estado_val
 
 
 def _format_date_ddmmaaaa(date_str: str | None) -> str:
@@ -586,7 +632,7 @@ def render_introduction_page():
     with col3:
         if st.button("🏠 Ya he registrado el taller. Volver al inicio", use_container_width=True):
             st.cache_data.clear()
-            _assign_latest_workshop_code()
+            _assign_latest_workshop_code(set_as_selected=True)
             st.session_state.current_page = "Inicio"
             st.rerun()
 
@@ -832,9 +878,7 @@ def render_form1_page():
             st.warning("⚠️ No hay taller seleccionado. Ve a 'Configuraciones' para seleccionar una fecha.")
         
         st.metric("Respuestas del taller", len(df))
-        if not df.empty:
-            st.dataframe(df.tail(10), use_container_width=True)
-        else:
+        if df.empty:
             st.warning("No hay respuestas para este taller en el rango de fechas.")
     except Exception as e:
         st.error(f"Error leyendo Cuestionario 1: {e}")
@@ -843,8 +887,7 @@ def render_form1_page():
 def render_analysis_trends_page():
     """Analiza Form 1 completo → tema dominante + nube de palabras (manteniendo tu prompt)."""
     st.markdown("## 📈 Análisis y tema dominante")
-    st.markdown(
-        '<p style="font-size: 1.5rem; font-weight: 500;">¡Gracias por compartirnos tu respuestas</strong>!</p>',
+    st.markdown(     '<p style="font-size: 1.5rem; font-weight: 500;">¡Gracias por compartirnos tu respuestas</strong>!</p>',
         unsafe_allow_html=True
         )   
     st.markdown(
@@ -875,9 +918,8 @@ def render_analysis_trends_page():
         st.info(f"📅 Analizando respuestas del taller del {workshop_date}")
         
         df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB) if FORM0_TAB else pd.DataFrame()
-        # Filtrar Form 0 también por fecha (para contexto)
         if not df0.empty:
-            df0 = _filter_df_by_date(df0, workshop_date)
+            df0, _, _, _ = _filter_form0_by_workshop(df0, workshop_date)
     except Exception as e:
         st.error(f"Error leyendo Form 1: {e}")
         return
@@ -900,81 +942,8 @@ def render_analysis_trends_page():
     from wordcloud import WordCloud, STOPWORDS
     import matplotlib.pyplot as plt
 
-
-    # --- Form 1 (respuestas principales) ---
-    sample = "\n".join([
-        f"{i+1}) " + " | ".join([f"{k}={v}" for k, v in row.items()])
-        for i, row in enumerate(df.to_dict('records')[:100])
-    ])
-
-    #  :
-    analysis_prompt = f"""
-    Actúa como un **analista de datos cualitativos experto en comunicación social, seguridad y percepción pública**. 
-    Tu tarea es interpretar información proveniente de talleres educativos sobre integridad de la información, información errónea y emociones sociales.
-
-    Dispones de dos fuentes de entrada:
-
-    [Formulario 0 – Contexto del grupo y del entorno local]
-    {context_text or "(vacío)"}
-
-    [Formulario 1 – Percepciones de inseguridad y consumo informativo]
-    {sample}
-
-    ---
-
-    🎯 **Objetivo del análisis:**
-    Identificar el **tema o fenómeno dominante** que genera inseguridad entre las personas participantes, 
-    entendiendo el **contexto y el tipo específico de problema** (no solo la categoría general).
-
-    El tema dominante debe reflejar no solo "qué" tipo de fenómeno ocurre, 
-    sino también "**en qué contexto o modalidad**" (por ejemplo: "violencia de género en espacios públicos", 
-    "criminalidad asociada al narcotráfico", "corrupción institucional ligada a la seguridad", etc.).
-
-    ---
-
-    🧩 **Tareas específicas:**
-    1️⃣ Analiza ambas fuentes para determinar el **tema o fenómeno dominante** con su contexto: tipo de hecho, actores, causas y entorno social o mediático.  
-    2️⃣ Distingue las **subdimensiones o manifestaciones** del fenómeno (por ejemplo, "violencia" → "violencia de género" o "violencia digital").  
-    3️⃣ Describe las **emociones predominantes** (miedo, enojo, desconfianza, indignación, tristeza, etc.) y su relación con el contexto del grupo.  
-    4️⃣ Resume las **causas percibidas** y los **actores involucrados** (autoridades, grupos delictivos, comunidad, medios, etc.).  
-    5️⃣ Sugiere hasta **10 palabras clave** representativas del tema y su entorno.  
-    6️⃣ Incluye **2 respuestas representativas** de los formularios que ilustren el fenómeno y su tono emocional.
-
-    ---
-
-    📄 **Formato de salida (JSON válido y estructurado):**
-    {{
-    "dominant_theme": "<tema o fenómeno dominante, frase corta y contextualizada>",
-    "rationale": "<explicación breve en 2–4 oraciones que justifique por qué se identificó este tema y cómo se manifiesta en contexto>",
-    "emotional_tone": "<emociones predominantes detectadas>",
-    "top_keywords": ["<palabra1>", "<palabra2>", "<palabra3>", ...],
-    "representative_answers": ["<cita1>", "<cita2>"]
-    }}
-
-    ---
-
-    🧠 **Reglas:**
-    - El tema debe ser **específico y contextual** (no solo "violencia" o "inseguridad"). Ejemplo: "violencia de género en espacios públicos", "corrupción policial asociada al narcotráfico", "desempleo juvenil y percepción de abandono institucional".  
-    - Usa solo información que pueda inferirse de los datos.  
-    - Mantén tono analítico, educativo y en español mexicano natural.  
-    - Devuelve **únicamente JSON estructurado**.
-    """
-
-
     try:
-        client = _openai_client()
-        with st.spinner("🔍 Analizando respuestas del Form 0 y Form 1…"):
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                temperature=0.3,
-                max_tokens=900,
-                messages=[
-                    {"role": "system", "content": "Eres un analista de datos cualitativos especializado en emociones sociales."},
-                    {"role": "user", "content": analysis_prompt},
-                ],
-            )
-        text = resp.choices[0].message.content.strip()
-        data = json.loads(re.search(r"\{[\s\S]*\}", text).group(0))
+        data = analyze_trends(df, df0)
     except Exception as e:
         st.error(f"Error de análisis: {e}")
         return
@@ -1087,20 +1056,9 @@ def render_neutral_news_page():
     
     if FORMS_SHEET_ID and FORM0_TAB and SA and workshop_date:
         try:
-            df0 = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
-            if not df0.empty:
-                df0 = _filter_df_by_date(df0, workshop_date)
-                if not df0.empty:
-                    fecha_cols = [col for col in df0.columns if 'fecha' in col.lower() and 'implementacion' in col.lower()]
-                    municipio_cols = [col for col in df0.columns if 'municipio' in col.lower()]
-                    
-                    if fecha_cols:
-                        fecha_implementacion = df0[fecha_cols[0]].iloc[0] if pd.notna(df0[fecha_cols[0]].iloc[0]) else None
-                    if municipio_cols:
-                        municipio = df0[municipio_cols[0]].iloc[0] if pd.notna(df0[municipio_cols[0]].iloc[0]) else None
-                    estado_cols = [col for col in df0.columns if 'estado' in col.lower()]
-                    if estado_cols:
-                        estado = df0[estado_cols[0]].iloc[0] if pd.notna(df0[estado_cols[0]].iloc[0]) else None
+            df0_raw = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+            if not df0_raw.empty:
+                _, fecha_implementacion, municipio, estado = _filter_form0_by_workshop(df0_raw, workshop_date)
         except Exception as e:
             st.caption(f"Nota: No se pudieron cargar datos del Form 0 para contexto adicional: {e}")
 
@@ -1434,6 +1392,7 @@ def render_conclusion_page():
     st.markdown("## 🎯 Conclusión")
 
     FORMS_SHEET_ID = _forms_sheet_id()
+    FORM0_TAB = _read_secrets("FORM0_TAB", "")
     FORM2_TAB = _read_secrets("FORM2_TAB", "")
     SA = _read_secrets("GOOGLE_SERVICE_ACCOUNT", "")
     workshop_date = st.session_state.get("selected_workshop_date")
@@ -1445,6 +1404,28 @@ def render_conclusion_page():
     if not workshop_date:
         st.warning("⚠️ Selecciona una fecha de taller en 'Configuraciones'.")
         return
+
+    municipio_ctx = None
+    estado_ctx = None
+    fecha_impl_ctx = None
+    if FORM0_TAB:
+        try:
+            df0_ctx = _sheet_to_df(FORMS_SHEET_ID, FORM0_TAB)
+            df0_ctx, fecha_impl_ctx, municipio_ctx, estado_ctx = _filter_form0_by_workshop(df0_ctx, workshop_date)
+        except Exception as e:
+            st.caption(f"Nota: no se pudo cargar el contexto de Form 0: {e}")
+
+    workshop_code = _current_workshop_code()
+    if workshop_code:
+        st.caption(f"🔢 Número del taller: {workshop_code}")
+    if workshop_date:
+        st.caption(f"📅 Fecha seleccionada: {workshop_date}")
+    if municipio_ctx:
+        st.caption(f"📍 Municipio: {municipio_ctx}")
+    if estado_ctx:
+        st.caption(f"🗺️ Estado: {estado_ctx}")
+    if fecha_impl_ctx:
+        st.caption(f"🗓️ Fecha de implementación: {fecha_impl_ctx}")
 
     try:
         with st.spinner("📥 Cargando datos de Form 2..."):
@@ -1622,23 +1603,19 @@ def render_conclusion_page():
 
         material_assets = [
             {
-                "label": "Resumen completo del taller",
-                "file": "material/resumen_taller.pdf",
+                "label": "Guía Ponle Filtro",
+                "url": "https://drive.google.com/file/d/1qyPYw6F8DduCFgKGEDO7iMSa2usc0_zE/view?usp=drive_link",
             },
             {
-                "label": "Guía complementaria breve",
-                "file": "material/guia_complementaria.pdf",
+                "label": "Formulario de retroalimentación",
+                "url": "https://forms.gle/eJrCeURhF5RNrVkz9",
             },
         ]
         st.markdown("---")
         st.subheader("Descarga el taller en PDF")
         cols_qr = st.columns(len(material_assets))
         for col, asset in zip(cols_qr, material_assets):
-            asset_url = (
-                "https://raw.githubusercontent.com/"
-                "MottumData/streamlit-information-integrity-workshop/main/"
-                f"{asset['file']}"
-            )
+            asset_url = asset["url"]
             qr_image = _qr_image_for(asset_url)
             with col:
                 st.caption(asset["label"])
@@ -1847,30 +1824,9 @@ def render_workshop_insights_page():
             st.warning("No hay respuestas combinadas aún para analizar para este taller.")
             return
 
-        # 2) Muestra un vistazo mínimo (opcional)
-        with st.expander("👀 Muestra de datos combinados utilizados (primeras 10 filas)"):
-            df_preview = df_all
         workshop_code = st.session_state.get("selected_workshop_code")
-        if "Taller" in df_all.columns:
-            taller_series = df_all["Taller"].astype(str).str.strip()
-            filtered = pd.DataFrame()
-            if workshop_code:
-                filtered = df_all[taller_series == str(workshop_code).strip()]
-            if filtered.empty and workshop_date:
-                filtered = df_all[taller_series == str(workshop_date).strip()]
-            if not filtered.empty:
-                df_preview = filtered
-        elif workshop_date:
-            date_col = _get_date_column_name(df_all)
-            if date_col:
-                df_dates = df_all.copy()
-                df_dates["_normalized_date"] = df_dates[date_col].apply(_normalize_date)
-                filtered = df_dates[df_dates["_normalized_date"] == workshop_date]
-                if not filtered.empty:
-                    df_preview = filtered
-            st.dataframe(df_preview.head(50), use_container_width=True)
 
-        # 3) Separar formularios para normalización y contexto
+        # 2) Separar formularios para normalización y contexto
         def _extract_form(df_source, tag):
             if "source_form" not in df_source.columns:
                 return pd.DataFrame()
@@ -1880,6 +1836,13 @@ def render_workshop_insights_page():
             return subset.drop(columns=["source_form"], errors="ignore")
 
         df_form0 = _extract_form(df_all, "F0")
+        workshop_code = st.session_state.get("selected_workshop_code")
+        code_col = next(
+            (col for col in df_form0.columns if "numero" in _normalize_label(col) and "taller" in _normalize_label(col)),
+            None
+        )
+        if workshop_code and code_col:
+            df_form0 = df_form0[df_form0[code_col].astype(str).str.strip() == str(workshop_code).strip()]
         df_form1 = _extract_form(df_all, "F1")
         df_form2 = _extract_form(df_all, "F2")
 
@@ -1887,7 +1850,6 @@ def render_workshop_insights_page():
             st.warning("No hay datos suficientes de Form1 o Form2 para generar el análisis.")
             return
 
-        # 4) Contexto del Form 0 en caso de que no esté disponible en sesión
         form0_context_text = st.session_state.get("form0_context_text", "")
         if not form0_context_text and not df_form0.empty:
             form0_context_text = "\n".join([
@@ -1895,7 +1857,6 @@ def render_workshop_insights_page():
                 for i, row in enumerate(df_form0.to_dict('records')[:30])
             ])
 
-        # 5) Normalizar datos para el análisis final
         try:
             df_normalized = _normalize_form_data(df_form1, df_form2, workshop_date)
         except Exception as e:
@@ -1906,7 +1867,6 @@ def render_workshop_insights_page():
             st.warning("La normalización devolvió un conjunto vacío. Revisa que Form1/Form2 tengan respuestas válidas.")
             return
 
-        # Persistir datos para los análisis adicionales
         st.session_state["analysis_df_all"] = df_all
         st.session_state["analysis_df_normalized"] = df_normalized
         st.session_state["analysis_form0_context"] = form0_context_text
