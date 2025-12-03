@@ -16,7 +16,14 @@ import plotly.express as px
 from config.secrets import read_secrets, forms_sheet_id
 from data.sheets import get_gspread_client, sheet_to_df, write_df_to_sheet, append_df_to_sheet
 from data.cleaning import normalize_form_data, filter_df_by_date
-from data.utils import get_date_column_name, normalize_date, get_workshop_options, load_joined_responses, _format_workshop_code
+from data.utils import (
+    get_date_column_name,
+    normalize_date,
+    get_workshop_options,
+    load_joined_responses,
+    _format_workshop_code,
+    sanitize_workshop_code_value,
+)
 from components.whatsapp_bubble import typing_then_bubble, find_image_by_prefix, find_matching_image
 from components.qr_utils import qr_image_for
 from components.navigation import get_navigation_context
@@ -67,8 +74,14 @@ _analyze_reactions = analyze_reactions
 _format_workshop_code = _format_workshop_code
 
 
+def _sanitize_session_code(value):
+    """Ensure workshop codes pulled from session are always clean strings."""
+    return sanitize_workshop_code_value(value)
+
+
 def _current_workshop_code():
-    return st.session_state.get("selected_workshop_code")
+    code = _sanitize_session_code(st.session_state.get("selected_workshop_code"))
+    return code or None
 
 
 def _normalize_label(text: str | None) -> str:
@@ -146,7 +159,7 @@ def _assign_latest_workshop_code(set_as_selected: bool = False):
         
         if latest_code:
             st.session_state.codigo_taller = latest_code
-            if set_as_selected or not st.session_state.get("selected_workshop_code"):
+            if set_as_selected or not _current_workshop_code():
                 st.session_state.selected_workshop_code = latest_code
     
     except Exception as e:
@@ -428,7 +441,7 @@ def render_setup_trainer_page():
                 def _option_label(opt):
                     return opt.get("label") or f"{opt.get('date')} · Número del taller {opt.get('code')}"
 
-                current_code = st.session_state.get("selected_workshop_code")
+                current_code = _current_workshop_code()
                 selected_index = 0
                 for i, opt in enumerate(workshop_options):
                     if opt["code"] == current_code:
@@ -1690,7 +1703,13 @@ def render_workshop_insights_page():
                 return
 
             with st.spinner("🔄 Transformando datos a formato normalizado..."):
-                df_normalized = _normalize_form_data(form1, form2, workshop_date)
+                workshop_code = _current_workshop_code()
+                df_normalized = _normalize_form_data(
+                    form1,
+                    form2,
+                    workshop_date=workshop_date,
+                    workshop_code=workshop_code,
+                )
 
             if df_normalized.empty:
                 st.warning("⚠️ No se encontraron datos para normalizar. Verifica columnas o estructura.")
@@ -1824,7 +1843,7 @@ def render_workshop_insights_page():
             st.warning("No hay respuestas combinadas aún para analizar para este taller.")
             return
 
-        workshop_code = st.session_state.get("selected_workshop_code")
+        workshop_code = _current_workshop_code()
 
         # 2) Separar formularios para normalización y contexto
         def _extract_form(df_source, tag):
@@ -1836,7 +1855,7 @@ def render_workshop_insights_page():
             return subset.drop(columns=["source_form"], errors="ignore")
 
         df_form0 = _extract_form(df_all, "F0")
-        workshop_code = st.session_state.get("selected_workshop_code")
+        workshop_code = _current_workshop_code()
         code_col = next(
             (col for col in df_form0.columns if "numero" in _normalize_label(col) and "taller" in _normalize_label(col)),
             None
@@ -1858,7 +1877,13 @@ def render_workshop_insights_page():
             ])
 
         try:
-            df_normalized = _normalize_form_data(df_form1, df_form2, workshop_date)
+            df_normalized = _normalize_form_data(
+                df_form1,
+                df_form2,
+                workshop_date=workshop_date,
+                workshop_code=workshop_code,
+                show_debug=False,
+            )
         except Exception as e:
             st.error(f"No se pudieron normalizar los datos: {e}")
             return
@@ -1983,7 +2008,7 @@ def render_inicio_page():
             st.rerun()
 
     # --- Resumen descargable del taller ---
-    codigo_taller = st.session_state.get("selected_workshop_code")
+    codigo_taller = _current_workshop_code()
     # (Se removió la tarjeta azul y el botón de descarga de la pantalla de inicio.)
 
 ROUTES = {

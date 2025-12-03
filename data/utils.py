@@ -48,6 +48,22 @@ def normalize_date(date_value) -> str:
     return str(date_value)
 
 
+def sanitize_workshop_code_value(value) -> str:
+    """Coerce any session/state value into a clean workshop code string."""
+    if isinstance(value, pd.DataFrame):
+        flat = value.values.flatten()
+        value = flat[0] if flat.size else ""
+    elif isinstance(value, pd.Series):
+        value = value.iloc[0] if not value.empty else ""
+    elif isinstance(value, (list, tuple)):
+        value = value[0] if value else ""
+
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+
+    return str(value).strip()
+
+
 def get_available_workshop_dates():
     """Obtiene las fechas disponibles del Form 0 para seleccionar talleres.
 
