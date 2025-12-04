@@ -815,7 +815,7 @@ def render_workshop_start_page():
     }
     </style>
     <div class="intro-content">
-    Te damos la bienvenida al taller de integridad de la información. 
+ 
     Este taller busca a través de la  ejercicios simulados y de reflexión que fortalezcas tu resistencia cognitiva y desarrolles herramientas críticas para enfrentar la información errónea que circula en entornos digitales y cotidianos en contextos de seguridad pública.
     Toda la información que proporciones será anónima, pero es necesario que tomes en cuenta que por la naturaleza de los temas abordados puedes experimentar sensibilidad. Por lo que es necesario que antes de continuar el taller, sepas lo siguiente: Estás en un espacio seguro, tu participación es voluntaria y tienes la libertad para abandonar la sesión en cualquier momento, sin consecuencias académicas, sociales ni institucionales, en el ejercicio no se grabarán rostros ni voces, ni se te presionará para participar o responder preguntas. 
     En caso de que lo solicites, acércate a la persona que facilita en taller para que te guíe en el proceso.
@@ -1390,7 +1390,7 @@ def render_explanation_page():
             unsafe_allow_html=True
             )  
 
-    st.subheader("Hilo Conductor")
+    st.subheader("¿Cómo influyen los encuadres narrativos?")
     st.markdown(
             '<p style="font-size: 1.5rem; font-weight: 300;">Sabías que existen factores cognitivos, sociales y emocionales que influyen directamente en la aceptación de la información falsa, incompleta o nociva? En este ejercicio de prevención, lo que hicimos fue exponernos a mensajes que estaban enmarcados con narraciones intencionales, las cuales se identifican como marcos narrativos, estos emplean técnicas de lenguaje con el propósito de impactar las emociones y percepciones de las personas</strong>.</p>',
             unsafe_allow_html=True
@@ -1753,7 +1753,7 @@ def render_workshop_insights_page():
 
     st.markdown("---")
 
-    st.subheader("Dashboard (Looker Studio)")
+    st.subheader("Análisis de las participaciones")
     st.markdown(
         """
         <div style="
@@ -1919,7 +1919,7 @@ def render_workshop_insights_page():
             st.markdown(markdown_output)
 
 
-    st.markdown("### Analizar impactos por género")
+    st.markdown("### Análisis de impactos interseccionales")
     with st.expander("¿Qué revisa este bloque?"):
         st.markdown(
             "Las personas suelen otorgar validez a la información de manera intuitiva, la repetición de afirmaciones refuerza esta percepción. Cuando una idea se repite, tiende a parecer más verdadera, fenómeno que se intensifica con la viralización en redes sociales. Este proceso genera el llamado efecto de verdad ilusoria, sustentado en tres señales cognitivas: familiaridad (el mensaje ya fue visto antes), fluidez (se procesa con facilidad) y coherencia (parece consistente con lo que se recuerda). (Ecker, 2022, The psychological drivers of misinformation belief and its resistance to correction; OCDE,2024, Hechos frente a falsedades). Así como las emociones que analizamos anteriormente, estas particularidades permiten que los marcos narrativos tenga una fuerte presencia e influencia. A continuación, abre el análisis y la pregunta generativa y regresa a los gráficos de confianza para observar y responder."
@@ -1962,18 +1962,22 @@ def render_workshop_insights_page():
 def render_inicio_page():
     """🏠 Página de inicio con opciones para registrar o iniciar un taller."""
     # Título
-    st.markdown("# 🧭 Taller de Integridad de la Información")
+    st.markdown("# 🧭 Sobre el taller de Integridad de la Información")
     
     # Introducción
     st.markdown("""
-    Bienvenido al taller de integridad de la información. Este taller busca fortalecer 
+    ¡Hola! Este taller busca fortalecer 
     la resistencia cognitiva de las y los participantes y desarrollar herramientas críticas 
     para enfrentar la información errónea que circula en entornos digitales y cotidianos 
     en contextos de seguridad pública.
     
-    A través de ejercicios simulados, se propone una experiencia activa y reflexiva que 
-    aprovecha las experiencias y conocimientos previos para desarrollar a través del 
-    pensamiento colectivo un análisis crítico de la información.
+    A través de ejercicios simulados, este piloto parte del conocimiento y las experiencias 
+    compartidas por las personas participantes del taller identificando efectos derivados del 
+    consumo de información en redes sociales y su impacto en la percepción de seguridad.
+
+    El taller se apoya de interacciones anónimas de participantes a través de formularios digitales 
+    y utiliza la IA para generar mensajes ficticios en redes que se vinculen a sus experiencias, 
+    analizar las participaciones durante el taller y generar preguntas abiertas que fomenten la reflexión crítica. 
     """)
     
     # Estilos CSS para el botón de registro
