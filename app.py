@@ -1907,7 +1907,7 @@ def render_workshop_insights_page():
     st.markdown("### Analizar emociones por encuadre")
     with st.expander("¿Qué calcula este análisis?"):
         st.markdown(
-            "El contenido emocional en los mensajes y noticias aumenta la persuasión y la difusión de información errónea (Ecker, 2022. The psychological drivers of misinformation belief and its resistance to correction), si bien, las emociones son distintas para cada persona, pueden estar influenciadas, por el contexto y las experiencias, de los cuales se valen los marcos narrativos para fortalecer su influencia."  
+            "El contenido emocional en los mensajes y noticias aumenta la persuasión y la difusión de información errónea, si bien, las emociones son distintas para cada persona, pueden estar influenciadas, por el contexto y las experiencias, de los cuales se valen los marcos narrativos para fortalecer su influencia."  
             "Abre la pregunta generativa y regresa a los gráficos de emociones para observar y responder."
         )
     if st.button("➕ Agregar análisis generativo", key="btn_emociones"):
@@ -1922,7 +1922,7 @@ def render_workshop_insights_page():
     st.markdown("### Análisis de impactos interseccionales")
     with st.expander("¿Qué revisa este bloque?"):
         st.markdown(
-            "Las personas suelen otorgar validez a la información de manera intuitiva, la repetición de afirmaciones refuerza esta percepción. Cuando una idea se repite, tiende a parecer más verdadera, fenómeno que se intensifica con la viralización en redes sociales. Este proceso genera el llamado efecto de verdad ilusoria, sustentado en tres señales cognitivas: familiaridad (el mensaje ya fue visto antes), fluidez (se procesa con facilidad) y coherencia (parece consistente con lo que se recuerda). (Ecker, 2022, The psychological drivers of misinformation belief and its resistance to correction; OCDE,2024, Hechos frente a falsedades). Así como las emociones que analizamos anteriormente, estas particularidades permiten que los marcos narrativos tenga una fuerte presencia e influencia. A continuación, abre el análisis y la pregunta generativa y regresa a los gráficos de confianza para observar y responder."
+            "Las personas suelen otorgar validez a la información de manera intuitiva, la repetición de afirmaciones refuerza esta percepción. Cuando una idea se repite, tiende a parecer más verdadera, fenómeno que se intensifica con la viralización en redes sociales. Este proceso genera el llamado efecto de verdad ilusoria, sustentado en tres señales cognitivas: familiaridad (el mensaje ya fue visto antes), fluidez (se procesa con facilidad) y coherencia (parece consistente con lo que se recuerda). Así como las emociones que analizamos anteriormente, estas particularidades permiten que los marcos narrativos tenga una fuerte presencia e influencia. A continuación, vean la pregunta generativa, ¿qué opinan?."
         )
     if st.button("➕ Agregar análisis generativo", key="btn_genero"):
         if df_all_cached is None or not isinstance(df_all_cached, pd.DataFrame) or df_all_cached.empty:
